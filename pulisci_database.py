@@ -1,7 +1,7 @@
 import sqlite3
 
 def pulisci_database():
-    conn = sqlite3.connect("ombrelloni.db")
+    conn = sqlite3.connect("prenotazioni.db")
     cursor = conn.cursor()
 
     # Elimina tutti i dati nella tabella ombrelloni
