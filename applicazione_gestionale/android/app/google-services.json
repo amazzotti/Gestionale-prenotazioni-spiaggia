@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "956407780553",
+    "project_id": "gestionale-spiaggia-943ca",
+    "storage_bucket": "gestionale-spiaggia-943ca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:956407780553:android:042a02fa14a5ac2e462918",
+        "android_client_info": {
+          "package_name": "com.example.applicazione_gestionale"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAG2CHY45RphF9CIUrgGm0QY4B6JFkEGF8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
