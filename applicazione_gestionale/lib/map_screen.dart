@@ -8,12 +8,14 @@ class Booking {
   final DateTime startDate;
   final DateTime endDate;
   final String notes;
+  final bool arrived;
 
   Booking({
     required this.clientName,
     required this.startDate,
     required this.endDate,
     this.notes = '',
+    this.arrived = false, // Valore predefinito
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +24,7 @@ class Booking {
       'startDate': Timestamp.fromDate(startDate),
       'endDate': Timestamp.fromDate(endDate),
       'notes': notes,
+      'arrived': arrived,
     };
   }
 
@@ -31,6 +34,7 @@ class Booking {
       startDate: (map['startDate'] as Timestamp).toDate(),
       endDate: (map['endDate'] as Timestamp).toDate(),
       notes: map['notes'] ?? '',
+      arrived: map['arrived'] ?? false,
     );
   }
 }
@@ -46,9 +50,20 @@ class Umbrella {
 
   bool isBookedDuring(DateTimeRange range) {
     if (!isBooked) return false;
+
+    // Normalize booking dates to midnight for day-only comparison
     final bookingStart = DateTime(booking!.startDate.year, booking!.startDate.month, booking!.startDate.day);
+    // Create an exclusive end date for the booking (the morning of the day after)
     final bookingEnd = DateTime(booking!.endDate.year, booking!.endDate.month, booking!.endDate.day).add(const Duration(days: 1));
-    return bookingStart.isBefore(range.end) && bookingEnd.isAfter(range.start);
+
+    // Normalize filter range dates for comparison
+    final filterStart = DateTime(range.start.year, range.start.month, range.start.day);
+    // Create an exclusive end date for the filter range. The range from the picker is inclusive.
+    final filterEnd = DateTime(range.end.year, range.end.month, range.end.day).add(const Duration(days: 1));
+
+    // The condition for two ranges [startA, endA) and [startB, endB) to overlap is:
+    // startA < endB && startB < endA
+    return bookingStart.isBefore(filterEnd) && filterStart.isBefore(bookingEnd);
   }
 }
 
@@ -75,8 +90,13 @@ final List<BeachSector> beachSectors = [
 // --- SCHERMATA DELLA MAPPA ---
 class MapScreen extends StatefulWidget {
   final String? highlightUmbrellaId;
+  final DateTimeRange? filterDateRange;
 
-  const MapScreen({super.key, this.highlightUmbrellaId});
+  const MapScreen({
+    super.key, 
+    this.highlightUmbrellaId,
+    this.filterDateRange, // Aggiunto parametro
+  });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -90,6 +110,14 @@ class _MapScreenState extends State<MapScreen> {
 
   final CollectionReference bookingsCollection = FirebaseFirestore.instance.collection('bookings');
 
+   @override
+  void initState() {
+    super.initState();
+    // Imposta il filtro data iniziale se fornito dal widget
+    _filterDateRange = widget.filterDateRange;
+  }
+
+
   Future<void> _saveBooking(Umbrella umbrella, Booking newBooking) async {
     await bookingsCollection.doc(umbrella.id).set(newBooking.toMap());
   }
@@ -102,7 +130,7 @@ class _MapScreenState extends State<MapScreen> {
     final nameController = TextEditingController(text: currentBooking?.clientName);
     final notesController = TextEditingController(text: currentBooking?.notes);
     DateTime startDate = currentBooking?.startDate ?? _filterDateRange?.start ?? DateTime.now();
-    DateTime endDate = currentBooking?.endDate ?? _filterDateRange?.end ?? DateTime.now();
+    DateTime endDate = currentBooking?.endDate ?? _filterDateRange?.end ?? startDate;
 
     showDialog(
       context: context,
@@ -196,6 +224,7 @@ class _MapScreenState extends State<MapScreen> {
   void _showDateRangePickerForSuggestion() async {
      final range = await showDateRangePicker(
       context: context,
+      initialDateRange: _filterDateRange, // Usa il filtro corrente come data iniziale
       firstDate: DateTime.now().subtract(const Duration(days: 30)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       helpText: 'Seleziona un periodo per vedere gli ombrelloni liberi',
@@ -216,12 +245,23 @@ class _MapScreenState extends State<MapScreen> {
                   colors: [Colors.green, Colors.white], stops: [0.5, 0.5], tileMode: TileMode.repeated)),
         ),
         actions: [
+            // -- Pulsante per cambiare il filtro data --
+           TextButton.icon(
+            icon: const Icon(Icons.calendar_today, color: Colors.black),
+            label: Text(
+              _filterDateRange != null 
+              ? '${DateFormat('dd/MM').format(_filterDateRange!.start)} - ${DateFormat('dd/MM').format(_filterDateRange!.end)}'
+              : 'Filtra per Data',
+              style: const TextStyle(color: Colors.black),
+            ),
+            onPressed: _showDateRangePickerForSuggestion,
+          ), 
           DropdownButton<String>(
             value: _selectedSectorName,
-            hint: const Text('Filtra Settore', style: TextStyle(color: Colors.black87)),
+            hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
             onChanged: (String? newValue) => setState(() => _selectedSectorName = newValue),
             items: [
-              const DropdownMenuItem<String>(value: null, child: Text('Tutti i settori')),
+              const DropdownMenuItem<String>(value: null, child: Text('Tutti')),
               ...beachSectors.map((s) => DropdownMenuItem<String>(value: s.name, child: Text(s.name))),
             ],
           ),
@@ -301,15 +341,20 @@ class _MapScreenState extends State<MapScreen> {
   Widget _buildUmbrella(Umbrella umbrella, Booking? booking) {
     umbrella.booking = booking;
 
-    bool isConsideredBooked = _filterDateRange == null ? umbrella.isBooked : umbrella.isBookedDuring(_filterDateRange!);
+    bool isConsideredBooked = _filterDateRange == null 
+        ? false // Se nessun intervallo è selezionato, mostra tutto come libero
+        : umbrella.isBookedDuring(_filterDateRange!);
 
     final color = isConsideredBooked ? Colors.red : Colors.green;
 
     return GestureDetector(
       onTap: () => _showBookingDialog(umbrella, booking),
-      child: Container(
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-        child: Center(child: Text(umbrella.id, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+      child: Opacity(
+        opacity: _filterDateRange == null ? 0.5 : 1.0, // Rendi gli ombrelloni semi-trasparenti se non c'è un filtro
+        child: Container(
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+          child: Center(child: Text(umbrella.id, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+        ),
       ),
     );
   }

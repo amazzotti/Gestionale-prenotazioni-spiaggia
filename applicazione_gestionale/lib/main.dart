@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'arrivi_oggi_screen.dart';
 import 'map_screen.dart';
 
 void main() {
@@ -266,6 +267,25 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // --- NUOVO FLUSSO DI PRENOTAZIONE ---
+  void _startNewBooking(BuildContext context) async {
+    final selectedRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Seleziona il periodo di prenotazione',
+    );
+
+    if (selectedRange != null && context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MapScreen(filterDateRange: selectedRange),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -311,13 +331,19 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
+                    onPressed: () => _startNewBooking(context),
+                    child: const Text('Nuova Prenotazione'),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const MapScreen()),
+                        MaterialPageRoute(
+                            builder: (context) => const ArriviOggiScreen()),
                       );
                     },
-                    child: const Text('Nuova Prenotazione'),
+                    child: const Text('Arrivi di Oggi'),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
