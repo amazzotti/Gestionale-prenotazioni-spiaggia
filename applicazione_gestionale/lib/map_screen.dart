@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-// --- MODELLI DATI (invariati) ---
+// --- MODELLI DATI ---
 class Booking {
   final String clientName;
   final DateTime startDate;
@@ -15,7 +15,7 @@ class Booking {
     required this.startDate,
     required this.endDate,
     this.notes = '',
-    this.arrived = false, // Valore predefinito
+    this.arrived = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -42,27 +42,24 @@ class Booking {
 class Umbrella {
   final String id;
   final String sectorName;
+  final int index;
   Booking? booking;
 
-  Umbrella({required this.id, required this.sectorName, this.booking});
+  Umbrella({
+    required this.id,
+    required this.sectorName,
+    required this.index,
+    this.booking,
+  });
 
   bool get isBooked => booking != null;
 
   bool isBookedDuring(DateTimeRange range) {
     if (!isBooked) return false;
-
-    // Normalize booking dates to midnight for day-only comparison
     final bookingStart = DateTime(booking!.startDate.year, booking!.startDate.month, booking!.startDate.day);
-    // Create an exclusive end date for the booking (the morning of the day after)
     final bookingEnd = DateTime(booking!.endDate.year, booking!.endDate.month, booking!.endDate.day).add(const Duration(days: 1));
-
-    // Normalize filter range dates for comparison
     final filterStart = DateTime(range.start.year, range.start.month, range.start.day);
-    // Create an exclusive end date for the filter range. The range from the picker is inclusive.
     final filterEnd = DateTime(range.end.year, range.end.month, range.end.day).add(const Duration(days: 1));
-
-    // The condition for two ranges [startA, endA) and [startB, endB) to overlap is:
-    // startA < endB && startB < endA
     return bookingStart.isBefore(filterEnd) && filterStart.isBefore(bookingEnd);
   }
 }
@@ -71,31 +68,29 @@ class BeachSector {
   final String name;
   final List<Umbrella> umbrellas;
   final int crossAxisCount;
+  final int rows;
+  final List<int> walkwayColumns;
 
   BeachSector({
     required this.name,
     required this.umbrellas,
-    this.crossAxisCount = 10,
+    required this.crossAxisCount,
+    required this.rows,
+    this.walkwayColumns = const [],
   });
 }
-
-// ========= CONFIGURAZIONE DELLA SPIAGGIA GLOBALE ==========
-final List<BeachSector> beachSectors = [
-  BeachSector(name: 'Mare', crossAxisCount: 5, umbrellas: List.generate(10, (i) => Umbrella(id: 'M${i + 1}', sectorName: 'Mare'))),
-  BeachSector(name: 'Tende', crossAxisCount: 4, umbrellas: [Umbrella(id: 'T1', sectorName: 'Tende'), Umbrella(id: 'T2', sectorName: 'Tende')]),
-  BeachSector(name: 'Dietro', crossAxisCount: 10, umbrellas: List.generate(50, (i) => Umbrella(id: '${i + 1}', sectorName: 'Dietro'))),
-];
-
 
 // --- SCHERMATA DELLA MAPPA ---
 class MapScreen extends StatefulWidget {
   final String? highlightUmbrellaId;
   final DateTimeRange? filterDateRange;
+  final List<BeachSector> beachSectors;
 
   const MapScreen({
-    super.key, 
+    super.key,
     this.highlightUmbrellaId,
-    this.filterDateRange, // Aggiunto parametro
+    this.filterDateRange,
+    required this.beachSectors,
   });
 
   @override
@@ -105,18 +100,18 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   String? _selectedSectorName;
   DateTimeRange? _filterDateRange;
-  Map<String, Booking> _currentBookings = {};
   bool _isHighlightPending = true;
 
   final CollectionReference bookingsCollection = FirebaseFirestore.instance.collection('bookings');
 
-   @override
+  @override
   void initState() {
     super.initState();
-    // Imposta il filtro data iniziale se fornito dal widget
     _filterDateRange = widget.filterDateRange;
+    if (widget.beachSectors.length == 1) {
+      _selectedSectorName = widget.beachSectors.first.name;
+    }
   }
-
 
   Future<void> _saveBooking(Umbrella umbrella, Booking newBooking) async {
     await bookingsCollection.doc(umbrella.id).set(newBooking.toMap());
@@ -158,9 +153,7 @@ class _MapScreenState extends State<MapScreen> {
                         if (date != null) {
                           setDialogState(() {
                             startDate = date;
-                            if (endDate.isBefore(startDate)) {
-                              endDate = startDate;
-                            }
+                            if (endDate.isBefore(startDate)) endDate = startDate;
                           });
                         }
                       },
@@ -180,14 +173,12 @@ class _MapScreenState extends State<MapScreen> {
                           firstDate: startDate,
                           lastDate: DateTime.now().add(const Duration(days: 365)),
                         );
-                        if (date != null) {
-                          setDialogState(() => endDate = date);
-                        }
+                        if (date != null) setDialogState(() => endDate = date);
                       },
                     ),
                   ],
                 ),
-                 const SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextField(
                   controller: notesController,
                   decoration: const InputDecoration(labelText: 'Note', border: OutlineInputBorder()),
@@ -198,22 +189,25 @@ class _MapScreenState extends State<MapScreen> {
             actions: [
               if (currentBooking != null)
                 TextButton(
-                    child: const Text('CANCELLA', style: TextStyle(color: Colors.red)),
-                    onPressed: () {
-                      _deleteBooking(umbrella);
-                      Navigator.of(context).pop();
-                    }),
+                  child: const Text('CANCELLA', style: TextStyle(color: Colors.red)),
+                  onPressed: () {
+                    _deleteBooking(umbrella);
+                    Navigator.of(context).pop();
+                  },
+                ),
               TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
               ElevatedButton(
-                  child: const Text('SALVA'),
-                  onPressed: () {
-                    if (nameController.text.isNotEmpty) {
-                      final newBooking = Booking(
-                          clientName: nameController.text, startDate: startDate, endDate: endDate, notes: notesController.text);
-                      _saveBooking(umbrella, newBooking);
-                      Navigator.of(context).pop();
-                    }
-                  }),
+                child: const Text('SALVA'),
+                onPressed: () {
+                  if (nameController.text.isNotEmpty) {
+                    final newBooking = Booking(
+                      clientName: nameController.text, startDate: startDate, endDate: endDate, notes: notesController.text,
+                    );
+                    _saveBooking(umbrella, newBooking);
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
             ],
           );
         });
@@ -221,48 +215,19 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showDateRangePickerForSuggestion() async {
-     final range = await showDateRangePicker(
-      context: context,
-      initialDateRange: _filterDateRange, // Usa il filtro corrente come data iniziale
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Seleziona un periodo per vedere gli ombrelloni liberi',
-    );
-    if (range != null) {
-      setState(() => _filterDateRange = range);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mappa Spiaggia'),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [Colors.green, Colors.white], stops: [0.5, 0.5], tileMode: TileMode.repeated)),
-        ),
         actions: [
-            // -- Pulsante per cambiare il filtro data --
-           TextButton.icon(
-            icon: const Icon(Icons.calendar_today, color: Colors.black),
-            label: Text(
-              _filterDateRange != null 
-              ? '${DateFormat('dd/MM').format(_filterDateRange!.start)} - ${DateFormat('dd/MM').format(_filterDateRange!.end)}'
-              : 'Filtra per Data',
-              style: const TextStyle(color: Colors.black),
-            ),
-            onPressed: _showDateRangePickerForSuggestion,
-          ), 
           DropdownButton<String>(
             value: _selectedSectorName,
             hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
             onChanged: (String? newValue) => setState(() => _selectedSectorName = newValue),
             items: [
               const DropdownMenuItem<String>(value: null, child: Text('Tutti')),
-              ...beachSectors.map((s) => DropdownMenuItem<String>(value: s.name, child: Text(s.name))),
+              ...widget.beachSectors.map((s) => DropdownMenuItem<String>(value: s.name, child: Text(s.name))),
             ],
           ),
           const SizedBox(width: 8),
@@ -279,36 +244,37 @@ class _MapScreenState extends State<MapScreen> {
             for (var doc in snapshot.data!.docs) {
               try {
                 bookingsMap[doc.id] = Booking.fromMap(doc.data() as Map<String, dynamic>);
-              } catch (e) { print(e); }
+              } catch (e) { /* Ignora */ }
             }
-          }
-          _currentBookings = bookingsMap;
-
-          if (widget.highlightUmbrellaId != null && _isHighlightPending) {
-            final umbrellaToHighlight = beachSectors
-                .expand((s) => s.umbrellas)
-                .firstWhere((u) => u.id == widget.highlightUmbrellaId, orElse: () => Umbrella(id: '', sectorName: ''));
-
-            if (umbrellaToHighlight.id.isNotEmpty) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _showBookingDialog(umbrellaToHighlight, bookingsMap[umbrellaToHighlight.id]);
-              });
-            }
-            _isHighlightPending = false;
           }
 
           final visibleSectors = _selectedSectorName == null
-              ? beachSectors
-              : beachSectors.where((s) => s.name == _selectedSectorName).toList();
+              ? widget.beachSectors
+              : widget.beachSectors.where((s) => s.name == _selectedSectorName).toList();
 
           return InteractiveViewer(
             minScale: 0.2,
             maxScale: 5.0,
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width,
+            child: SingleChildScrollView(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: visibleSectors.map((sector) => _buildSector(sector, bookingsMap)).toList(),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: visibleSectors.map((sector) {
+                  return Column(
+                    children: [
+                      if (sector.name == 'Mare')
+                        Container(
+                          height: 50,
+                          margin: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade100,
+                            border: Border.symmetric(horizontal: BorderSide(color: Colors.blue.shade300, width: 2)),
+                          ),
+                          child: const Center(child: Text('MARE', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))), 
+                        ),
+                      _buildSector(sector, bookingsMap),
+                    ],
+                  );
+                }).toList(),
               ),
             ),
           );
@@ -318,7 +284,9 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildSector(BeachSector sector, Map<String, Booking> bookingsMap) {
-     return Padding(
+    final umbrellaMap = {for (var u in sector.umbrellas) u.index: u};
+
+    return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(sector.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
@@ -327,10 +295,33 @@ class _MapScreenState extends State<MapScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: sector.crossAxisCount, crossAxisSpacing: 8, mainAxisSpacing: 8),
-          itemCount: sector.umbrellas.length,
+            crossAxisCount: sector.crossAxisCount,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: sector.rows * sector.crossAxisCount,
           itemBuilder: (context, index) {
-            final umbrella = sector.umbrellas[index];
+            final col = index % sector.crossAxisCount;
+            if (sector.walkwayColumns.contains(col)) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.brown.shade200,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.square_foot_rounded, size: 20, color: Colors.black54),
+              );
+            }
+
+            final umbrella = umbrellaMap[index];
+            if (umbrella == null) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              );
+            }
+
             final booking = bookingsMap[umbrella.id];
             return _buildUmbrella(umbrella, booking);
           },
@@ -338,30 +329,29 @@ class _MapScreenState extends State<MapScreen> {
       ]),
     );
   }
+
   Widget _buildUmbrella(Umbrella umbrella, Booking? booking) {
     umbrella.booking = booking;
-
-    bool isConsideredBooked = _filterDateRange == null 
-        ? false // Se nessun intervallo è selezionato, mostra tutto come libero
-        : umbrella.isBookedDuring(_filterDateRange!);
-
+    bool isConsideredBooked = _filterDateRange != null && umbrella.isBookedDuring(_filterDateRange!);
     final color = isConsideredBooked ? Colors.red : Colors.green;
 
     return GestureDetector(
       onTap: () => _showBookingDialog(umbrella, booking),
       child: Opacity(
-        opacity: _filterDateRange == null ? 0.5 : 1.0, // Rendi gli ombrelloni semi-trasparenti se non c'è un filtro
+        opacity: _filterDateRange == null ? 0.5 : 1.0,
         child: Container(
           decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-          child: Center(child: Text(umbrella.id, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          child: Center(
+            child: FittedBox( // --- Soluzione per il testo!
+              fit: BoxFit.scaleDown,
+              child: Text(umbrella.id, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ),
       ),
     );
   }
 }
-
-// --- DELEGATO DI RICERCA POTENZIATO ---
-enum SearchMode { byName, byDate }
 
 class BookingSearchDelegate extends SearchDelegate<Umbrella?> {
   final List<Umbrella> allUmbrellas;
@@ -391,9 +381,9 @@ class BookingSearchDelegate extends SearchDelegate<Umbrella?> {
         Widget searchControls;
         if (_searchMode == SearchMode.byName) {
           searchControls = const Padding(
-             padding: EdgeInsets.all(16.0),
-             child: Text('Digita il nome del cliente nella barra in alto.'),
-           );
+            padding: EdgeInsets.all(16.0),
+            child: Text('Digita il nome del cliente nella barra in alto.'),
+          );
         } else {
           searchControls = Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -405,14 +395,8 @@ class BookingSearchDelegate extends SearchDelegate<Umbrella?> {
                   child: const Text('Cambia Data'),
                   onPressed: () async {
                     final pickedDate = await showDatePicker(
-                        context: context, 
-                        initialDate: _selectedDate, 
-                        firstDate: DateTime(2020), 
-                        lastDate: DateTime(2030)
-                    );
-                    if (pickedDate != null) {
-                      setState(() => _selectedDate = pickedDate);
-                    }
+                        context: context, initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                    if (pickedDate != null) setState(() => _selectedDate = pickedDate);
                   },
                 )
               ],
@@ -461,14 +445,11 @@ class BookingSearchDelegate extends SearchDelegate<Umbrella?> {
     final Iterable<Umbrella> results;
 
     if (_searchMode == SearchMode.byName) {
-      if (query.isEmpty) {
-        return const Center(child: Text('Inizia a digitare un nome...'));
-      }
-      results = bookedUmbrellas.where((u) => 
-        u.booking!.clientName.toLowerCase().contains(query.toLowerCase()));
+      if (query.isEmpty) return const Center(child: Text('Inizia a digitare un nome...'));
+      results = bookedUmbrellas.where((u) => u.booking!.clientName.toLowerCase().contains(query.toLowerCase()));
     } else {
-       final searchDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-       results = bookedUmbrellas.where((u) {
+      final searchDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      results = bookedUmbrellas.where((u) {
         final booking = u.booking!;
         final startDay = DateTime(booking.startDate.year, booking.startDate.month, booking.startDate.day);
         final endDay = DateTime(booking.endDate.year, booking.endDate.month, booking.endDate.day);
@@ -476,9 +457,7 @@ class BookingSearchDelegate extends SearchDelegate<Umbrella?> {
       });
     }
 
-    if (results.isEmpty) {
-      return const Center(child: Text('Nessuna prenotazione trovata.'));
-    }
+    if (results.isEmpty) return const Center(child: Text('Nessuna prenotazione trovata.'));
 
     return ListView(children: results.map((u) => _buildSearchResultTile(context, u)).toList());
   }
@@ -493,3 +472,5 @@ class BookingSearchDelegate extends SearchDelegate<Umbrella?> {
     );
   }
 }
+
+enum SearchMode { byName, byDate }
