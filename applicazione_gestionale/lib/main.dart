@@ -133,38 +133,40 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                TextField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                      labelText: 'Username', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Password', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true),
-                ),
-                CheckboxListTile(
-                  title: const Text("Ricordami"),
-                  value: _rememberMe,
-                  onChanged: (newValue) {
-                    setState(() {
-                      _rememberMe = newValue!;
-                    });
-                  },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: _login,
-                  child: const Text('Login'),
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  TextField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                        labelText: 'Username', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Password', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true),
+                  ),
+                  CheckboxListTile(
+                    title: const Text("Ricordami"),
+                    value: _rememberMe,
+                    onChanged: (newValue) {
+                      setState(() {
+                        _rememberMe = newValue!;
+                      });
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: _login,
+                    child: const Text('Login'),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -213,7 +215,6 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }).toList();
 
-        // --- Ordinamento personalizzato ---
         final sectorOrder = {'Mare': 1, 'Tende': 2, 'Dietro': 3};
         sectors.sort((a, b) {
           final orderA = sectorOrder[a.name] ?? 99;
@@ -250,30 +251,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSearch(BuildContext context) async {
     if (_isLoading || _beachSectors.isEmpty) return;
-    final allUmbrellas = _beachSectors.expand((s) => s.umbrellas).toList();
+    
     final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
-    final bookingsMap = <String, Booking>{};
-    for (var doc in snapshot.docs) {
-      try {
-        bookingsMap[doc.id] = Booking.fromMap(doc.data() as Map<String, dynamic>);
-      } catch (e) { /* Ignora */ }
-    }
-    for (var umbrella in allUmbrellas) {
-      umbrella.booking = bookingsMap[umbrella.id];
-    }
+    final allBookings = snapshot.docs.map((doc) => Booking.fromFirestore(doc)).toList();
+    final allUmbrellas = _beachSectors.expand((s) => s.umbrellas).toList();
 
     if (!context.mounted) return;
-    final selectedUmbrella = await showSearch<Umbrella?>(
+    final selectedBooking = await showSearch<Booking?>(
       context: context,
-      delegate: BookingSearchDelegate(allUmbrellas),
+      delegate: BookingSearchDelegate(allBookings, allUmbrellas),
     );
 
-    if (selectedUmbrella != null && context.mounted) {
+    if (selectedBooking != null && context.mounted) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => MapScreen(
-            highlightUmbrellaId: selectedUmbrella.id,
+            highlightUmbrellaId: selectedBooking.umbrellaId,
+            filterDateRange: DateTimeRange(start: selectedBooking.startDate, end: selectedBooking.endDate),
             beachSectors: _beachSectors,
           ),
         ),
@@ -289,17 +284,19 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Resettare la Stagione?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-              ),
-            ],
+          content: SingleChildScrollView( // <-- Correzione qui
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
@@ -341,17 +338,19 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Accesso Editor Spiaggia'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-              ),
-            ],
+          content: SingleChildScrollView( // <-- Correzione qui
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop()),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'map_screen.dart'; // Import per la classe Booking
 
 class ArriviOggiScreen extends StatefulWidget {
   const ArriviOggiScreen({super.key});
@@ -9,7 +10,7 @@ class ArriviOggiScreen extends StatefulWidget {
 }
 
 class _ArriviOggiScreenState extends State<ArriviOggiScreen> {
-  List<Map<String, dynamic>> _arrivi = [];
+  List<Booking> _arrivi = [];
   bool _isLoading = true;
   String? _error;
 
@@ -23,23 +24,26 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> {
     try {
       final now = DateTime.now();
       final startOfToday = DateTime(now.year, now.month, now.day);
-      final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
+      final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
       final querySnapshot = await FirebaseFirestore.instance
           .collection('bookings')
-          .where('startDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
-          .where('startDate', isLessThan: Timestamp.fromDate(startOfTomorrow))
+          .where('startDate', isLessThanOrEqualTo: Timestamp.fromDate(endOfToday))
           .get();
+      
+      final todayBookings = querySnapshot.docs.where((doc) {
+          final booking = Booking.fromFirestore(doc);
+          return booking.startDate.isBefore(endOfToday) && booking.endDate.isAfter(startOfToday.subtract(const Duration(seconds: 1)));
+      }).map((doc) => Booking.fromFirestore(doc)).toList();
 
       if (mounted) {
         setState(() {
-          _arrivi = querySnapshot.docs.map((doc) {
-            return {'id': doc.id, ...doc.data()};
-          }).toList();
+          _arrivi = todayBookings;
           _isLoading = false;
         });
       }
     } catch (e) {
+      print(e);
       if (mounted) {
         setState(() {
           _error = 'Errore nel caricamento degli arrivi.';
@@ -53,7 +57,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Arrivi di Oggi'),
+        title: const Text('Arrivi e Presenze di Oggi'),
       ),
       body: _buildBody(),
     );
@@ -67,33 +71,36 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> {
       return Center(child: Text(_error!));
     }
     if (_arrivi.isEmpty) {
-      return const Center(child: Text('Nessun arrivo previsto per oggi.'));
+      return const Center(child: Text('Nessun arrivo o presenza per oggi.'));
     }
 
     return ListView.builder(
       itemCount: _arrivi.length,
       itemBuilder: (context, index) {
         final booking = _arrivi[index];
-        final bookingId = booking['id'];
-        final nome = booking['clientName'] ?? 'Nome non disponibile';
-        final notes = booking['notes'] as String? ?? '';
-        final arrived = booking['arrived'] ?? false;
 
         return CheckboxListTile(
-          title: Text(nome),
-          subtitle: notes.isNotEmpty ? Text(notes) : null,
-          value: arrived,
+          title: Text('${booking.clientName} - Ombrellone ${booking.umbrellaId}'),
+          subtitle: booking.notes.isNotEmpty ? Text(booking.notes) : null,
+          value: booking.arrived,
           onChanged: (bool? value) {
             if (value != null) {
-              // Update in Firestore
               FirebaseFirestore.instance
                   .collection('bookings')
-                  .doc(bookingId)
+                  .doc(booking.id)
                   .update({'arrived': value});
               
-              // Update local state and rebuild UI
               setState(() {
-                _arrivi[index]['arrived'] = value;
+                // Aggiorna l'oggetto locale per un feedback immediato
+                _arrivi[index] = Booking(
+                  id: booking.id,
+                  umbrellaId: booking.umbrellaId,
+                  clientName: booking.clientName,
+                  startDate: booking.startDate,
+                  endDate: booking.endDate,
+                  notes: booking.notes,
+                  arrived: value,
+                );
               });
             }
           },
