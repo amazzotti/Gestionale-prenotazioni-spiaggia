@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'arrivi_oggi_screen.dart';
@@ -17,13 +18,11 @@ class StripedBackgroundPainter extends CustomPainter {
     final paintGreen = Paint()..color = Colors.green.withOpacity(0.1);
     final paintWhite = Paint()..color = Colors.white.withOpacity(0.1);
     const stripeWidth = 30.0;
-
     for (double i = 0; i < size.width; i += stripeWidth * 2) {
       canvas.drawRect(Rect.fromLTWH(i, 0, stripeWidth, size.height), paintGreen);
       canvas.drawRect(Rect.fromLTWH(i + stripeWidth, 0, stripeWidth, size.height), paintWhite);
     }
   }
-
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
@@ -108,14 +107,18 @@ class _LoginScreenState extends State<LoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
       }
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Credenziali non valide')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Credenziali non valide')),
+        );
+      }
     }
   }
 
@@ -192,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadBeachConfiguration();
   }
 
+  // =========== INIZIO BLOCCO CODICE CORRETTO ===========
   Future<void> _loadBeachConfiguration() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -200,14 +204,21 @@ class _HomeScreenState extends State<HomeScreen> {
       if (snapshot.docs.isNotEmpty) {
         final sectors = snapshot.docs.map((doc) {
           final data = doc.data();
+          final sectorName = data['name'] as String; // Es. 'Mare'
           final umbrellasData = (data['umbrellas'] as List<dynamic>);
-          
+
+          // *** QUESTA È LA CORREZIONE FONDAMENTALE ***
+          // Per ogni ombrellone nel database, creiamo un ID UNIVOCO
           final umbrellas = umbrellasData.map((u) {
-            return Umbrella(id: u['id'], sectorName: data['name'], index: u['index']);
+            final simpleId = u['id']; // Es. '9'
+            final uniqueId = '$sectorName-$simpleId'; // Crea 'Mare-9'
+
+            // Crea l'oggetto Umbrella con l'ID univoco
+            return Umbrella(id: uniqueId, sectorName: sectorName, index: u['index']);
           }).toList();
 
           return BeachSector(
-            name: data['name'],
+            name: sectorName,
             rows: data['rows'],
             crossAxisCount: data['crossAxisCount'],
             umbrellas: umbrellas,
@@ -238,20 +249,23 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+  // =========== FINE BLOCCO CODICE CORRETTO ===========
 
   void _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLoggedIn', false);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
+    if(mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
   }
 
   void _showSearch(BuildContext context) async {
     if (_isLoading || _beachSectors.isEmpty) return;
-    
+
     final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
     final allBookings = snapshot.docs.map((doc) => Booking.fromFirestore(doc)).toList();
     final allUmbrellas = _beachSectors.expand((s) => s.umbrellas).toList();
@@ -284,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Resettare la Stagione?'),
-          content: SingleChildScrollView( // <-- Correzione qui
+          content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -338,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Accesso Editor Spiaggia'),
-          content: SingleChildScrollView( // <-- Correzione qui
+          content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -363,6 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     context,
                     MaterialPageRoute(builder: (context) => const BeachEditorScreen()),
                   );
+                  // Ricarica la configurazione dopo aver usato l'editor
                   _loadBeachConfiguration();
                 } else {
                   Navigator.of(dialogContext).pop();
@@ -385,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isLoading) return;
     if (_beachSectors.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Prima crea una mappa della spiaggia!')),
+        const SnackBar(content: Text('Prima crea una mappa della spiaggia dall\'editor!')),
       );
       return;
     }
@@ -436,70 +451,136 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
-              children: [
-                CustomPaint(
-                  size: Size.infinite,
-                  painter: StripedBackgroundPainter(),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Container(
-                          height: 200,
-                          child: Center(
-                              child: Text(
-                                'BAGNI CARLA 98',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 40,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade800),
-                              )),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton(
-                          onPressed: () => _startNewBooking(context),
-                          child: const Text('Nuova Prenotazione'),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => const ArriviOggiScreen()),
-                            );
-                          },
-                          child: const Text('Arrivi di Oggi'),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => _showSearch(context),
-                          child: const Text('Modifica o Cancella Prenotazione'),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            _showPasswordDialogForEditor(context);
-                          },
-                          child: const Text('Crea la tua Spiaggia'),
-                        ),
-                        const SizedBox(height: 32),
-                        ElevatedButton(
-                          onPressed: () => _showResetDialog(context),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red.shade700),
-                          child: const Text('Reset Stagione', style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ),
+        children: [
+          CustomPaint(
+            size: Size.infinite,
+            painter: StripedBackgroundPainter(),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 200,
+                    child: Center(
+                        child: Text(
+                          'BAGNI CARLA 98',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade800),
+                        )),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => _startNewBooking(context),
+                    child: const Text('Nuova Prenotazione'),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ArriviOggiScreen()),
+                      );
+                    },
+                    child: const Text('Arrivi di Oggi'),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _showSearch(context),
+                    child: const Text('Modifica o Cancella Prenotazione'),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      _showPasswordDialogForEditor(context);
+                    },
+                    child: const Text('Editor Mappa Spiaggia'),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: () => _showResetDialog(context),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700),
+                    child: const Text('Reset Stagione', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BookingSearchDelegate extends SearchDelegate<Booking?> {
+  final List<Booking> allBookings;
+  final List<Umbrella> allUmbrellas;
+
+  BookingSearchDelegate(this.allBookings, this.allUmbrellas);
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [
+    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
+  ];
+
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, null),
+  );
+
+  @override
+  Widget buildResults(BuildContext context) {
+    final results = _getFilteredResults(query);
+    return _buildResultsList(results);
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    final suggestions = _getFilteredResults(query);
+    return _buildResultsList(suggestions);
+  }
+
+  List<Booking> _getFilteredResults(String query) {
+    if (query.isEmpty) {
+      return [];
+    }
+
+    return allBookings
+        .where((booking) =>
+    booking.clientName.toLowerCase().contains(query.toLowerCase()) ||
+        booking.umbrellaId.split('-').last.contains(query))
+        .toList();
+  }
+
+  Widget _buildResultsList(List<Booking> results) {
+    if (results.isEmpty) {
+      return const Center(
+        child: Text('Nessuna prenotazione trovata.'),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final booking = results[index];
+        final formattedStartDate = DateFormat('dd/MM/yyyy').format(booking.startDate);
+        final formattedEndDate = DateFormat('dd/MM/yyyy').format(booking.endDate);
+
+        return ListTile(
+          title: Text('${booking.clientName} - Ombrellone: ${booking.umbrellaId.split('-').last}'),
+          subtitle: Text('Periodo: $formattedStartDate - $formattedEndDate\nSettore: ${booking.umbrellaId.split('-').first}'),
+          isThreeLine: true,
+          onTap: () => close(context, booking),
+        );
+      },
     );
   }
 }
