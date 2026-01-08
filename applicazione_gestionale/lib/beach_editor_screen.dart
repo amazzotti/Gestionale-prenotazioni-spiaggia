@@ -2,17 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EditorUmbrella {
-  // Questo ID conterrà l'ID univoco, es. 'Mare-50'
   String? id;
   bool isActive;
   final int index;
 
   EditorUmbrella({this.id, this.isActive = false, required this.index});
 
-  // Metodo helper per mostrare solo il numero nell'interfaccia
+  // Metodo helper per estrarre solo il numero (es. '51' da 'Mare-51')
+  // o l'identificativo della tenda (es. 'T1-1' da 'Tende-T1-1')
   String get simpleId {
     if (id == null) return '';
-    // Estrae l'ultima parte dopo il trattino, es. '50' da 'Mare-50'
+    if (id!.startsWith('Tende-')) {
+      return id!.replaceFirst('Tende-', '');
+    }
     return id!.split('-').last;
   }
 }
@@ -65,12 +67,11 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
     setState(() {
       _isLoading = true;
       _selectedSector = sector;
-      _gridState = []; // Pulisce la griglia
+      _gridState = [];
     });
 
     try {
       final doc = await FirebaseFirestore.instance.collection('beachLayout').doc(sector).get();
-
       int rows = 10;
       int cols = 10;
       List<EditorUmbrella> newGrid;
@@ -86,12 +87,14 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
         for (var u in umbrellas) {
           final index = u['index'];
           if (index != null && index < newGrid.length) {
-            // L'ID che carichiamo è già quello univoco
-            newGrid[index] = EditorUmbrella(id: u['id'], isActive: true, index: index);
+            // Ricostruiamo l'ID univoco partendo da quello semplice salvato
+            final sectorName = data['name'];
+            final simpleId = u['id']; // Es. '51' o 'T1-1'
+            final uniqueId = '$sectorName-$simpleId'; // Es. 'Mare-51' o 'Tende-T1-1'
+            newGrid[index] = EditorUmbrella(id: uniqueId, isActive: true, index: index);
           }
         }
       } else {
-        // Logica di default se il settore non esiste
         _walkwayColumns = [];
         switch (sector) {
           case 'Mare': rows = 5; cols = 9; break;
@@ -118,56 +121,50 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
   }
 
   void _onUmbrellaTap(int index) {
-    if (_selectedSector == null) return; // Sicurezza
+    if (_selectedSector == null) return;
     final umbrella = _gridState[index];
 
     setState(() {
       if (umbrella.isActive) {
-        // Disattiva l'ombrellone e cancella eventuali prenotazioni future
         if (umbrella.id != null) {
           FirebaseFirestore.instance.collection('bookings').doc(umbrella.id!).delete();
         }
         umbrella.isActive = false;
         umbrella.id = null;
       } else {
-        // --- LOGICA CORRETTA PER CREARE UN ID UNIVOCO ---
-        final sectorPrefix = _selectedSector!; // Es. 'Mare', 'Tende', 'Dietro'
+        String newId;
 
-        // Filtra gli ombrelloni ATTIVI solo in QUESTO settore
-        final activeInSector = _gridState.where((u) => u.isActive && u.id != null && u.id!.startsWith(sectorPrefix));
+        if (_selectedSector == 'Tende') {
+          // Logica speciale per il settore Tende
+          final row = index ~/ _crossAxisCount;
+          final prefix = 'T${row + 1}'; // Crea 'T1' o 'T2'
 
-        // Trova il numero più alto tra gli ID di questo settore
-        final maxId = activeInSector
-            .map((u) => int.tryParse(u.simpleId) ?? 0) // Usa simpleId per prendere solo il numero
-            .fold(0, (max, current) => current > max ? current : max);
+          final activeInRow = _gridState.where((u) {
+            final id = u.id;
+            if (id == null || !u.isActive) return false;
+            final parts = id.split('-');
+            return parts.length == 3 && parts[0] == 'Tende' && parts[1] == prefix;
+          });
 
-        // Crea il nuovo ID univoco
-        final newId = '$sectorPrefix-${maxId + 1}'; // Es. 'Mare-51'
+          final maxIdInRow = activeInRow
+              .map((u) => int.tryParse(u.id!.split('-').last) ?? 0)
+              .fold(0, (max, current) => current > max ? current : max);
+
+          newId = 'Tende-$prefix-${maxIdInRow + 1}'; // Es. 'Tende-T1-1'
+        } else {
+          // Logica standard per Mare e Dietro
+          final sectorPrefix = _selectedSector!;
+          final activeInSector = _gridState.where((u) => u.isActive && u.id != null && u.id!.startsWith(sectorPrefix));
+
+          final maxId = activeInSector
+              .map((u) => int.tryParse(u.simpleId) ?? 0)
+              .fold(0, (max, current) => current > max ? current : max);
+
+          newId = '$sectorPrefix-${maxId + 1}'; // Es. 'Mare-51'
+        }
 
         umbrella.id = newId;
         umbrella.isActive = true;
-      }
-    });
-  }
-
-  void _toggleWalkway(int index) {
-    final col = index % _crossAxisCount;
-    setState(() {
-      if (_walkwayColumns.contains(col)) {
-        _walkwayColumns.remove(col);
-      } else {
-        _walkwayColumns.add(col);
-        // Rimuove tutti gli ombrelloni nella colonna e le relative prenotazioni
-        for (int i = 0; i < _gridState.length; i++) {
-          if (i % _crossAxisCount == col) {
-            final umbrella = _gridState[i];
-            if (umbrella.isActive && umbrella.id != null) {
-              FirebaseFirestore.instance.collection('bookings').doc(umbrella.id!).delete();
-            }
-            umbrella.isActive = false;
-            umbrella.id = null;
-          }
-        }
       }
     });
   }
@@ -177,10 +174,15 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Salva gli ombrelloni con il loro ID univoco (es. 'Mare-50')
       final activeUmbrellas = _gridState
           .where((u) => u.isActive && u.id != null)
-          .map((u) => {'id': u.id, 'index': u.index}) // L'ID è già univoco
+          .map((u) {
+        // Salviamo un ID SEMPLICE nel database.
+        String idToSave = _selectedSector == 'Tende'
+            ? u.id!.replaceFirst('Tende-', '') // da 'Tende-T1-1' a 'T1-1'
+            : u.simpleId; // da 'Mare-51' a '51'
+        return {'id': idToSave, 'index': u.index};
+      })
           .toList();
 
       await FirebaseFirestore.instance.collection('beachLayout').doc(_selectedSector!).set({
@@ -206,6 +208,27 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _toggleWalkway(int index) {
+    final col = index % _crossAxisCount;
+    setState(() {
+      if (_walkwayColumns.contains(col)) {
+        _walkwayColumns.remove(col);
+      } else {
+        _walkwayColumns.add(col);
+        for (int i = 0; i < _gridState.length; i++) {
+          if (i % _crossAxisCount == col) {
+            final umbrella = _gridState[i];
+            if (umbrella.isActive && umbrella.id != null) {
+              FirebaseFirestore.instance.collection('bookings').doc(umbrella.id!).delete();
+            }
+            umbrella.isActive = false;
+            umbrella.id = null;
+          }
+        }
+      }
+    });
   }
 
   Future<void> _deleteAllLayouts() async {
@@ -259,8 +282,8 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
           TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('ANNULLA')),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(); // Chiudi il dialogo
-              _deleteAllLayouts(); // Esegui la cancellazione
+              Navigator.of(context).pop();
+              _deleteAllLayouts();
             },
             child: const Text('CANCELLA TUTTO', style: TextStyle(color: Colors.red)),
           ),
@@ -365,7 +388,6 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
                               : FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              // Mostra solo il numero semplice
                               umbrella.simpleId,
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                             ),

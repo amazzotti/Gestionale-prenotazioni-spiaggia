@@ -29,7 +29,6 @@ class StripedBackgroundPainter extends CustomPainter {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -46,7 +45,6 @@ class MyApp extends StatelessWidget {
 
 class InitialLoadingScreen extends StatefulWidget {
   const InitialLoadingScreen({super.key});
-
   @override
   State<InitialLoadingScreen> createState() => _InitialLoadingScreenState();
 }
@@ -62,7 +60,6 @@ class _InitialLoadingScreenState extends State<InitialLoadingScreen> {
     await Firebase.initializeApp();
     final prefs = await SharedPreferences.getInstance();
     final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -75,17 +72,12 @@ class _InitialLoadingScreenState extends State<InitialLoadingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -98,26 +90,19 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() async {
     const hardcodedUsername = 'Bagni Carla 98';
     const hardcodedPassword = 'EstateSdraiata';
-
     final username = _usernameController.text;
     final password = _passwordController.text;
-
     if (username == hardcodedUsername && password == hardcodedPassword) {
       if (_rememberMe) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
       }
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Credenziali non valide')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Credenziali non valide')));
       }
     }
   }
@@ -125,49 +110,28 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Accesso Gestionale'),
-      ),
+      appBar: AppBar(title: const Text('Accesso Gestionale')),
       body: Stack(
         children: [
-          CustomPaint(
-            size: Size.infinite,
-            painter: StripedBackgroundPainter(),
-          ),
+          CustomPaint(size: Size.infinite, painter: StripedBackgroundPainter()),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  TextField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(
-                        labelText: 'Username', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true),
-                  ),
+                  TextField(controller: _usernameController, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true)),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                        labelText: 'Password', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true),
-                  ),
+                  TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), fillColor: Colors.white70, filled: true)),
                   CheckboxListTile(
                     title: const Text("Ricordami"),
                     value: _rememberMe,
-                    onChanged: (newValue) {
-                      setState(() {
-                        _rememberMe = newValue!;
-                      });
-                    },
+                    onChanged: (newValue) => setState(() => _rememberMe = newValue!),
                     controlAffinity: ListTileControlAffinity.leading,
                     contentPadding: EdgeInsets.zero,
                   ),
                   const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: _login,
-                    child: const Text('Login'),
-                  ),
+                  ElevatedButton(onPressed: _login, child: const Text('Login')),
                 ],
               ),
             ),
@@ -180,7 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -195,7 +158,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadBeachConfiguration();
   }
 
-  // =========== INIZIO BLOCCO CODICE CORRETTO ===========
   Future<void> _loadBeachConfiguration() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -204,19 +166,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (snapshot.docs.isNotEmpty) {
         final sectors = snapshot.docs.map((doc) {
           final data = doc.data();
-          final sectorName = data['name'] as String; // Es. 'Mare'
+          final sectorName = data['name'] as String;
           final umbrellasData = (data['umbrellas'] as List<dynamic>);
-
-          // *** QUESTA È LA CORREZIONE FONDAMENTALE ***
-          // Per ogni ombrellone nel database, creiamo un ID UNIVOCO
           final umbrellas = umbrellasData.map((u) {
-            final simpleId = u['id']; // Es. '9'
-            final uniqueId = '$sectorName-$simpleId'; // Crea 'Mare-9'
-
-            // Crea l'oggetto Umbrella con l'ID univoco
+            final simpleId = u['id'];
+            final uniqueId = '$sectorName-$simpleId';
             return Umbrella(id: uniqueId, sectorName: sectorName, index: u['index']);
           }).toList();
-
           return BeachSector(
             name: sectorName,
             rows: data['rows'],
@@ -225,57 +181,36 @@ class _HomeScreenState extends State<HomeScreen> {
             walkwayColumns: List<int>.from(data['walkwayColumns'] ?? []),
           );
         }).toList();
-
         final sectorOrder = {'Mare': 1, 'Tende': 2, 'Dietro': 3};
-        sectors.sort((a, b) {
-          final orderA = sectorOrder[a.name] ?? 99;
-          final orderB = sectorOrder[b.name] ?? 99;
-          return orderA.compareTo(orderB);
-        });
-
+        sectors.sort((a, b) => (sectorOrder[a.name] ?? 99).compareTo(sectorOrder[b.name] ?? 99));
         if (mounted) setState(() => _beachSectors = sectors);
       } else {
         if (mounted) setState(() => _beachSectors = []);
       }
     } catch (e) {
-      print("Errore caricamento configurazione spiaggia: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Errore caricamento mappa: $e'))
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore caricamento mappa: $e')));
         setState(() => _beachSectors = []);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-  // =========== FINE BLOCCO CODICE CORRETTO ===========
 
   void _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLoggedIn', false);
-
     if(mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
     }
   }
 
   void _showSearch(BuildContext context) async {
     if (_isLoading || _beachSectors.isEmpty) return;
-
     final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
     final allBookings = snapshot.docs.map((doc) => Booking.fromFirestore(doc)).toList();
-    final allUmbrellas = _beachSectors.expand((s) => s.umbrellas).toList();
-
     if (!context.mounted) return;
-    final selectedBooking = await showSearch<Booking?>(
-      context: context,
-      delegate: BookingSearchDelegate(allBookings, allUmbrellas),
-    );
-
+    final selectedBooking = await showSearch<Booking?>(context: context, delegate: BookingSearchDelegate(allBookings));
     if (selectedBooking != null && context.mounted) {
       Navigator.push(
         context,
@@ -292,116 +227,87 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showResetDialog(BuildContext context) {
     final passwordController = TextEditingController();
-
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Resettare la Stagione?'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                ),
-              ],
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('Resettare la Stagione?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
+              const SizedBox(height: 16),
+              TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
+            ],
           ),
-          actions: [
-            TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
-            TextButton(
-              child: const Text('CONFERMA E CANCELLA', style: TextStyle(color: Colors.red)),
-              onPressed: () async {
-                if (passwordController.text == 'EstateSdraiata') {
-                  final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
-                  for (var doc in snapshot.docs) {
-                    await doc.reference.delete();
-                  }
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Tutte le prenotazioni sono state cancellate.')),
-                    );
-                  }
-                } else {
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Password errata.')),
-                    );
-                  }
+        ),
+        actions: [
+          TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
+          TextButton(
+            child: const Text('CONFERMA E CANCELLA', style: TextStyle(color: Colors.red)),
+            onPressed: () async {
+              if (passwordController.text == 'EstateSdraiata') {
+                final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
+                for (var doc in snapshot.docs) { await doc.reference.delete(); }
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tutte le prenotazioni sono state cancellate.')));
                 }
-              },
-            ),
-          ],
-        );
-      },
+              } else {
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password errata.')));
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 
   void _showPasswordDialogForEditor(BuildContext context) {
     final passwordController = TextEditingController();
-
     showDialog(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Accesso Editor Spiaggia'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                ),
-              ],
-            ),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Accesso Editor Spiaggia'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
+              const SizedBox(height: 16),
+              TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
+            ],
           ),
-          actions: [
-            TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop()),
-            ElevatedButton(
-              child: const Text('CONFERMA'),
-              onPressed: () async {
-                if (passwordController.text == 'EstateSdraiata') {
-                  Navigator.of(dialogContext).pop();
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const BeachEditorScreen()),
-                  );
-                  // Ricarica la configurazione dopo aver usato l'editor
-                  _loadBeachConfiguration();
-                } else {
-                  Navigator.of(dialogContext).pop();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Password errata.')),
-                    );
-                  }
+        ),
+        actions: [
+          TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop()),
+          ElevatedButton(
+            child: const Text('CONFERMA'),
+            onPressed: () async {
+              if (passwordController.text == 'EstateSdraiata') {
+                Navigator.of(dialogContext).pop();
+                await Navigator.push(context, MaterialPageRoute(builder: (context) => const BeachEditorScreen()));
+                _loadBeachConfiguration();
+              } else {
+                Navigator.of(dialogContext).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password errata.')));
                 }
-              },
-            ),
-          ],
-        );
-      },
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
-
 
   void _startNewBooking(BuildContext context) async {
     if (_isLoading) return;
     if (_beachSectors.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Prima crea una mappa della spiaggia dall\'editor!')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prima crea una mappa della spiaggia dall\'editor!')));
       return;
     }
     final selectedRange = await showDateRangePicker(
@@ -410,17 +316,8 @@ class _HomeScreenState extends State<HomeScreen> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
       helpText: 'Seleziona il periodo di prenotazione',
     );
-
     if (selectedRange != null && context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MapScreen(
-            filterDateRange: selectedRange,
-            beachSectors: _beachSectors,
-          ),
-        ),
-      );
+      Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors)));
     }
   }
 
@@ -431,82 +328,35 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Bagni Carla 98'),
         backgroundColor: Colors.green,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadBeachConfiguration,
-            tooltip: 'Ricarica Mappa',
-          ),
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearch(context),
-            tooltip: 'Cerca Prenotazione',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _logout(context),
-            tooltip: 'Logout',
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadBeachConfiguration, tooltip: 'Ricarica Mappa'),
+          IconButton(icon: const Icon(Icons.search), onPressed: () => _showSearch(context), tooltip: 'Cerca Prenotazione'),
+          IconButton(icon: const Icon(Icons.logout), onPressed: () => _logout(context), tooltip: 'Logout'),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
         children: [
-          CustomPaint(
-            size: Size.infinite,
-            painter: StripedBackgroundPainter(),
-          ),
+          CustomPaint(size: Size.infinite, painter: StripedBackgroundPainter()),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(
-                    height: 200,
-                    child: Center(
-                        child: Text(
-                          'BAGNI CARLA 98',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade800),
-                        )),
-                  ),
+                  SizedBox(height: 200, child: Center(child: Text('BAGNI CARLA 98', textAlign: TextAlign.center, style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.green.shade800)))),
                   const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => _startNewBooking(context),
-                    child: const Text('Nuova Prenotazione'),
-                  ),
+                  ElevatedButton(onPressed: () => _startNewBooking(context), child: const Text('Nuova Prenotazione')),
                   const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ArriviOggiScreen()),
-                      );
-                    },
-                    child: const Text('Arrivi di Oggi'),
-                  ),
+                  ElevatedButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen())), child: const Text('Arrivi di Oggi')),
                   const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _showSearch(context),
-                    child: const Text('Modifica o Cancella Prenotazione'),
-                  ),
+                  ElevatedButton(onPressed: () => _showSearch(context), child: const Text('Modifica o Cancella Prenotazione')),
                   const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      _showPasswordDialogForEditor(context);
-                    },
-                    child: const Text('Editor Mappa Spiaggia'),
-                  ),
+                  ElevatedButton(onPressed: () => _showPasswordDialogForEditor(context), child: const Text('Editor Mappa Spiaggia')),
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () => _showResetDialog(context),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade700),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
                     child: const Text('Reset Stagione', style: TextStyle(color: Colors.white)),
                   ),
                 ],
@@ -521,62 +371,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class BookingSearchDelegate extends SearchDelegate<Booking?> {
   final List<Booking> allBookings;
-  final List<Umbrella> allUmbrellas;
-
-  BookingSearchDelegate(this.allBookings, this.allUmbrellas);
+  BookingSearchDelegate(this.allBookings);
 
   @override
-  List<Widget>? buildActions(BuildContext context) => [
-    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
-  ];
-
+  List<Widget>? buildActions(BuildContext context) => [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
   @override
-  Widget? buildLeading(BuildContext context) => IconButton(
-    icon: const Icon(Icons.arrow_back),
-    onPressed: () => close(context, null),
-  );
-
+  Widget? buildLeading(BuildContext context) => IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, null));
   @override
-  Widget buildResults(BuildContext context) {
-    final results = _getFilteredResults(query);
-    return _buildResultsList(results);
-  }
-
+  Widget buildResults(BuildContext context) => _buildResultsList();
   @override
-  Widget buildSuggestions(BuildContext context) {
-    final suggestions = _getFilteredResults(query);
-    return _buildResultsList(suggestions);
-  }
+  Widget buildSuggestions(BuildContext context) => _buildResultsList();
 
-  List<Booking> _getFilteredResults(String query) {
-    if (query.isEmpty) {
-      return [];
-    }
-
-    return allBookings
-        .where((booking) =>
-    booking.clientName.toLowerCase().contains(query.toLowerCase()) ||
-        booking.umbrellaId.split('-').last.contains(query))
-        .toList();
-  }
-
-  Widget _buildResultsList(List<Booking> results) {
-    if (results.isEmpty) {
-      return const Center(
-        child: Text('Nessuna prenotazione trovata.'),
-      );
-    }
-
+  Widget _buildResultsList() {
+    if (query.isEmpty) return const Center(child: Text('Digita un nome per cercare.'));
+    final results = allBookings.where((b) => b.clientName.toLowerCase().contains(query.toLowerCase()));
+    if (results.isEmpty) return const Center(child: Text('Nessuna prenotazione trovata.'));
     return ListView.builder(
       itemCount: results.length,
       itemBuilder: (context, index) {
-        final booking = results[index];
-        final formattedStartDate = DateFormat('dd/MM/yyyy').format(booking.startDate);
-        final formattedEndDate = DateFormat('dd/MM/yyyy').format(booking.endDate);
-
+        final booking = results.elementAt(index);
+        String displayId = booking.umbrellaId;
+        if (booking.umbrellaId.startsWith('Tende-')) {
+          displayId = booking.umbrellaId.replaceFirst('Tende-', '');
+        } else {
+          displayId = booking.umbrellaId.split('-').last;
+        }
         return ListTile(
-          title: Text('${booking.clientName} - Ombrellone: ${booking.umbrellaId.split('-').last}'),
-          subtitle: Text('Periodo: $formattedStartDate - $formattedEndDate\nSettore: ${booking.umbrellaId.split('-').first}'),
+          title: Text('${booking.clientName} - Ombrellone: $displayId'),
+          subtitle: Text('Periodo: ${DateFormat('dd/MM/yy').format(booking.startDate)} - ${DateFormat('dd/MM/yy').format(booking.endDate)}\nSettore: ${booking.umbrellaId.split('-').first}'),
           isThreeLine: true,
           onTap: () => close(context, booking),
         );
