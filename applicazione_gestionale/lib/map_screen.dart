@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+// --- MODELLI DATI (Corretti e Coerenti) ---
 class Booking {
   final String id;
   final String umbrellaId;
@@ -57,6 +58,7 @@ class BeachSector {
   BeachSector({required this.name, required this.umbrellas, required this.crossAxisCount, required this.rows, this.walkwayColumns = const []});
 }
 
+// --- SCHERMATA DELLA MAPPA ---
 class MapScreen extends StatefulWidget {
   final String? highlightUmbrellaId;
   final DateTimeRange? filterDateRange;
@@ -71,6 +73,7 @@ class _MapScreenState extends State<MapScreen> {
   DateTimeRange? _filterDateRange;
   Booking? _bookingToMove;
   bool _isHighlightPending = true;
+  String? _selectedSectorName; // Variabile per tenere traccia del settore scelto
 
   final CollectionReference bookingsCollection = FirebaseFirestore.instance.collection('bookings');
 
@@ -216,19 +219,31 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     bool isMoveMode = _bookingToMove != null;
+
+    // Logica per mostrare i settori visibili in base alla selezione
+    final visibleSectors = _selectedSectorName == null
+        ? widget.beachSectors
+        : widget.beachSectors.where((s) => s.name == _selectedSectorName).toList();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isMoveMode ? 'Sposta Prenotazione' : 'Mappa Spiaggia'),
         actions: isMoveMode ? [] : [
+          // =========== INIZIO BLOCCO DI CODICE CORRETTO ===========
           DropdownButton<String>(
-            value: null,
+            value: _selectedSectorName, // Usa la variabile di stato
             hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
-            onChanged: (String? newValue) { /* Logica filtro non implementata */ },
+            onChanged: (String? newValue) {
+              setState(() {
+                _selectedSectorName = newValue; // Aggiorna lo stato quando l'utente sceglie
+              });
+            },
             items: [
               const DropdownMenuItem<String>(value: null, child: Text('Tutti')),
               ...widget.beachSectors.map((s) => DropdownMenuItem<String>(value: s.name, child: Text(s.name))),
             ],
           ),
+          // =========== FINE BLOCCO DI CODICE CORRETTO ===========
           const SizedBox(width: 8),
         ],
       ),
@@ -243,6 +258,7 @@ class _MapScreenState extends State<MapScreen> {
                 if (snapshot.hasError) return const Center(child: Text('Errore di connessione.'));
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 final allBookings = snapshot.data!.docs.map((doc) => Booking.fromFirestore(doc)).toList();
+
                 if (widget.highlightUmbrellaId != null && _isHighlightPending) {
                   try {
                     final umbrellaToHighlight = widget.beachSectors.expand((s) => s.umbrellas).firstWhere((u) => u.id == widget.highlightUmbrellaId);
@@ -250,7 +266,8 @@ class _MapScreenState extends State<MapScreen> {
                     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _showBookingDialog(umbrellaToHighlight, bookingToHighlight); });
                   } catch (e) {/* Ombrellone non trovato */}
                 }
-                final visibleSectors = widget.beachSectors;
+
+                // Usa la variabile 'visibleSectors' che abbiamo definito sopra
                 return InteractiveViewer(
                   minScale: 0.2, maxScale: 5.0,
                   child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: visibleSectors.map((sector) => _buildSector(sector, allBookings)).toList())),
