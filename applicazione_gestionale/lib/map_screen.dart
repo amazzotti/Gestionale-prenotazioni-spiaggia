@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-// --- MODELLI DATI (Corretti e Coerenti) ---
+// --- MODELLI DATI ---
 class Booking {
   final String id;
   final String umbrellaId;
@@ -26,7 +26,7 @@ class Booking {
     Map<String, dynamic> map = doc.data() as Map<String, dynamic>;
     return Booking(
       id: doc.id,
-      umbrellaId: map['umbrellaId'] ?? doc.id,
+      umbrellaId: map['umbrellaId'] ?? '',
       clientName: map['clientName'] ?? '',
       startDate: (map['startDate'] as Timestamp).toDate(),
       endDate: (map['endDate'] as Timestamp).toDate(),
@@ -41,6 +41,7 @@ class Umbrella {
   final String sectorName;
   final int index;
   Umbrella({required this.id, required this.sectorName, required this.index});
+  
   String get simpleId {
     if (id.startsWith('Tende-')) {
       return id.replaceFirst('Tende-', '');
@@ -73,7 +74,7 @@ class _MapScreenState extends State<MapScreen> {
   DateTimeRange? _filterDateRange;
   Booking? _bookingToMove;
   bool _isHighlightPending = true;
-  String? _selectedSectorName; // Variabile per tenere traccia del settore scelto
+  String? _selectedSectorName;
 
   final CollectionReference bookingsCollection = FirebaseFirestore.instance.collection('bookings');
 
@@ -139,9 +140,8 @@ class _MapScreenState extends State<MapScreen> {
                 child: Text(currentBooking == null ? 'SALVA' : 'AGGIORNA'),
                 onPressed: () {
                   if (nameController.text.isNotEmpty) {
-                    final String docId = umbrella.id;
                     final data = {
-                      'umbrellaId': docId,
+                      'umbrellaId': umbrella.id,
                       'clientName': nameController.text,
                       'startDate': Timestamp.fromDate(startDate),
                       'endDate': Timestamp.fromDate(endDate),
@@ -151,7 +151,7 @@ class _MapScreenState extends State<MapScreen> {
                     if (currentBooking != null) {
                       bookingsCollection.doc(currentBooking.id).update(data);
                     } else {
-                      bookingsCollection.doc(docId).set(data);
+                      bookingsCollection.add(data);
                     }
                     Navigator.of(context).pop();
                   }
@@ -166,61 +166,15 @@ class _MapScreenState extends State<MapScreen> {
 
   void _moveBooking(Umbrella newUmbrella) {
     if (_bookingToMove == null) return;
-    final oldBookingId = _bookingToMove!.id;
-    final newBookingId = newUmbrella.id;
-    bookingsCollection.doc(oldBookingId).get().then((doc) {
-      if (doc.exists) {
-        final oldData = doc.data() as Map<String, dynamic>;
-        final newData = {...oldData, 'umbrellaId': newBookingId};
-        final batch = FirebaseFirestore.instance.batch();
-        batch.set(bookingsCollection.doc(newBookingId), newData);
-        batch.delete(bookingsCollection.doc(oldBookingId));
-        return batch.commit();
-      }
-    }).then((_) {
+    bookingsCollection.doc(_bookingToMove!.id).update({'umbrellaId': newUmbrella.id}).then((_) {
       setState(() => _bookingToMove = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Prenotazione spostata all\'ombrellone ${newUmbrella.simpleId}')));
-    }).catchError((e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore durante lo spostamento: $e')));
     });
-  }
-
-  void _showFreeUmbrellas(List<Booking> allBookings) {
-    if (_filterDateRange == null) return;
-    final allUmbrellas = widget.beachSectors.expand((s) => s.umbrellas).toList();
-    final freeUmbrellas = allUmbrellas.where((u) => _findBookingFor(u, _filterDateRange, allBookings) == null).toList();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Ombrelloni liberi dal ${DateFormat('dd/MM/yy').format(_filterDateRange!.start)} al ${DateFormat('dd/MM/yy').format(_filterDateRange!.end)}'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: freeUmbrellas.isEmpty
-                ? const Text('Nessun ombrellone libero nel periodo selezionato.')
-                : ListView.builder(
-              shrinkWrap: true,
-              itemCount: freeUmbrellas.length,
-              itemBuilder: (context, index) {
-                final umbrella = freeUmbrellas[index];
-                return ListTile(
-                  title: Text('Ombrellone ${umbrella.simpleId} (Settore: ${umbrella.sectorName})'),
-                  onTap: () { Navigator.of(context).pop(); _showBookingDialog(umbrella, null); },
-                );
-              },
-            ),
-          ),
-          actions: [TextButton(child: const Text('CHIUDI'), onPressed: () => Navigator.of(context).pop())],
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     bool isMoveMode = _bookingToMove != null;
-
-    // Logica per mostrare i settori visibili in base alla selezione
     final visibleSectors = _selectedSectorName == null
         ? widget.beachSectors
         : widget.beachSectors.where((s) => s.name == _selectedSectorName).toList();
@@ -229,13 +183,12 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: Text(isMoveMode ? 'Sposta Prenotazione' : 'Mappa Spiaggia'),
         actions: isMoveMode ? [] : [
-          // =========== INIZIO BLOCCO DI CODICE CORRETTO ===========
           DropdownButton<String>(
-            value: _selectedSectorName, // Usa la variabile di stato
+            value: _selectedSectorName,
             hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
             onChanged: (String? newValue) {
               setState(() {
-                _selectedSectorName = newValue; // Aggiorna lo stato quando l'utente sceglie
+                _selectedSectorName = newValue;
               });
             },
             items: [
@@ -243,7 +196,6 @@ class _MapScreenState extends State<MapScreen> {
               ...widget.beachSectors.map((s) => DropdownMenuItem<String>(value: s.name, child: Text(s.name))),
             ],
           ),
-          // =========== FINE BLOCCO DI CODICE CORRETTO ===========
           const SizedBox(width: 8),
         ],
       ),
@@ -264,10 +216,9 @@ class _MapScreenState extends State<MapScreen> {
                     final umbrellaToHighlight = widget.beachSectors.expand((s) => s.umbrellas).firstWhere((u) => u.id == widget.highlightUmbrellaId);
                     final bookingToHighlight = _findBookingFor(umbrellaToHighlight, _filterDateRange ?? DateTimeRange(start: DateTime.now(), end: DateTime.now().add(const Duration(days: 1))), allBookings);
                     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _showBookingDialog(umbrellaToHighlight, bookingToHighlight); });
-                  } catch (e) {/* Ombrellone non trovato */}
+                  } catch (e) {}
                 }
 
-                // Usa la variabile 'visibleSectors' che abbiamo definito sopra
                 return InteractiveViewer(
                   minScale: 0.2, maxScale: 5.0,
                   child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: visibleSectors.map((sector) => _buildSector(sector, allBookings)).toList())),
@@ -279,17 +230,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
       floatingActionButton: isMoveMode
           ? FloatingActionButton(onPressed: () => setState(() => _bookingToMove = null), tooltip: 'Annulla Spostamento', backgroundColor: Colors.red, child: const Icon(Icons.close))
-          : FloatingActionButton.extended(
-        onPressed: () {
-          if (_filterDateRange == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seleziona un periodo di date prima di cercare i liberi!'))); return; }
-          bookingsCollection.get().then((snapshot) {
-            final allBookings = snapshot.docs.map((doc) => Booking.fromFirestore(doc)).toList();
-            _showFreeUmbrellas(allBookings);
-          });
-        },
-        label: const Text('Suggerisci'),
-        icon: const Icon(Icons.lightbulb_outline),
-      ),
+          : null,
     );
   }
 
