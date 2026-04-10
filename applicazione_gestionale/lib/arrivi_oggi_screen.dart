@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';import 'package:intl/intl.dart';
-import 'map_screen.dart'; // Importa la classe Booking (che usa 'arrived')
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'map_screen.dart';
 
 class ArriviOggiScreen extends StatefulWidget {
   const ArriviOggiScreen({super.key});
@@ -9,13 +10,16 @@ class ArriviOggiScreen extends StatefulWidget {
   State<ArriviOggiScreen> createState() => _ArriviOggiScreenState();
 }
 
-class _ArriviOggiScreenState extends State<ArriviOggiScreen> {
-  DateTime get _startOfToday {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
+class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerProviderStateMixin {
+  DateTime _selectedDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
   }
 
-  // Aggiorna il campo 'arrived' in Firebase
   Future<void> _toggleArrived(String bookingId, bool currentStatus) async {
     try {
       await FirebaseFirestore.instance
@@ -24,88 +28,144 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> {
           .update({'arrived': !currentStatus});
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Errore durante l\'aggiornamento: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore: $e')));
       }
+    }
+  }
+
+  Future<void> _deleteBooking(String bookingId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Conferma Cancellazione'),
+        content: const Text('Sei sicuro di voler eliminare questa prenotazione?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ANNULLA')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('ELIMINA', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await FirebaseFirestore.instance.collection('bookings').doc(bookingId).delete();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final todayTimestamp = Timestamp.fromDate(_startOfToday);
-    final formattedDate = DateFormat('dd/MM/yyyy').format(_startOfToday);
+    final formattedSelectedDate = DateFormat('dd/MM/yyyy').format(_selectedDate);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Arrivi del $formattedDate'),
+        title: const Text('Gestione Arrivi'),
         backgroundColor: Colors.green,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          isScrollable: false, // Assicura che le tab occupino tutto lo spazio
+          tabs: [
+            const Tab(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4.0),
+                child: Text('ARRIVI OGGI', style: TextStyle(fontSize: 13), textAlign: TextAlign.center),
+              ),
+            ),
+            Tab(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: Text('ARRIVI IN DATA\n($formattedSelectedDate)', style: const TextStyle(fontSize: 11), textAlign: TextAlign.center),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_month),
+            onPressed: () async {
+              final pickedDate = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                locale: const Locale('it', 'IT'),
+              );
+              if (pickedDate != null) {
+                setState(() => _selectedDate = pickedDate);
+              }
+            },
+            tooltip: 'Seleziona Data',
+          )
+        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Cerca le prenotazioni la cui data di inizio è oggi
-        stream: FirebaseFirestore.instance
-            .collection('bookings')
-            .where('startDate', isEqualTo: todayTimestamp)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('bookings').snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Si è verificato un errore: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('Nessun arrivo previsto per oggi.'));
-          }
-
-          final arrivals = snapshot.data!.docs
-              .map((doc) => Booking.fromFirestore(doc))
-              .toList();
-
-          arrivals.sort((a, b) => a.clientName.compareTo(b.clientName));
-
-          return ListView.builder(
-            itemCount: arrivals.length,
-            itemBuilder: (context, index) {
-              final booking = arrivals[index];
-
-              String displayId = booking.umbrellaId;
-              if (booking.umbrellaId.startsWith('Tende-')) {
-                displayId = booking.umbrellaId.replaceFirst('Tende-', '');
-              } else {
-                displayId = booking.umbrellaId.split('-').last;
-              }
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                child: CheckboxListTile(
-                  value: booking.arrived,
-                  activeColor: Colors.green,
-                  onChanged: (bool? value) {
-                    if (value != null) {
-                      _toggleArrived(booking.id, booking.arrived);
-                    }
-                  },
-                  title: Text(
-                    '${booking.clientName} - Ombrellone $displayId',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      decoration: booking.arrived
-                          ? TextDecoration.lineThrough
-                          : TextDecoration.none,
-                      color: booking.arrived ? Colors.grey.shade600 : null,
-                    ),
-                  ),
-                  subtitle: Text(
-                      'Periodo: ${DateFormat('dd/MM').format(booking.startDate)} - ${DateFormat('dd/MM').format(booking.endDate)}\nSettore: ${booking.umbrellaId.split('-').first}'),
-                  isThreeLine: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-              );
-            },
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          
+          final allBookings = snapshot.data!.docs.map((doc) => Booking.fromFirestore(doc)).toList();
+          
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              _buildList(allBookings, filterDate: DateTime.now(), onlyArrivals: true),
+              _buildList(allBookings, filterDate: _selectedDate, onlyArrivals: false),
+            ],
           );
         },
       ),
+    );
+  }
+
+  Widget _buildList(List<Booking> bookings, {required DateTime filterDate, required bool onlyArrivals}) {
+    final targetDate = DateTime(filterDate.year, filterDate.month, filterDate.day);
+
+    final filtered = bookings.where((b) {
+      final start = DateTime(b.startDate.year, b.startDate.month, b.startDate.day);
+      final end = DateTime(b.endDate.year, b.endDate.month, b.endDate.day);
+      
+      if (onlyArrivals) {
+        return start.isAtSameMomentAs(targetDate);
+      } else {
+        return !targetDate.isBefore(start) && !targetDate.isAfter(end);
+      }
+    }).toList();
+
+    filtered.sort((a, b) => a.clientName.toLowerCase().compareTo(b.clientName.toLowerCase()));
+
+    if (filtered.isEmpty) {
+      return const Center(child: Text('Nessuna prenotazione trovata per questa data.'));
+    }
+
+    return ListView.builder(
+      itemCount: filtered.length,
+      itemBuilder: (context, index) {
+        final b = filtered[index];
+        String num = b.umbrellaId.contains('-') ? b.umbrellaId.split('-').last : b.umbrellaId;
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: Checkbox(
+              value: b.arrived, 
+              activeColor: Colors.green,
+              onChanged: (_) => _toggleArrived(b.id, b.arrived)
+            ),
+            title: Text('${b.clientName} - Ombr. $num', 
+              style: TextStyle(
+                fontWeight: FontWeight.bold, 
+                decoration: b.arrived ? TextDecoration.lineThrough : null,
+                color: b.arrived ? Colors.grey : null,
+              )
+            ),
+            subtitle: Text('Dal ${DateFormat('dd/MM').format(b.startDate)} al ${DateFormat('dd/MM').format(b.endDate)}\nSettore: ${b.umbrellaId.split('-').first}'),
+            isThreeLine: true,
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red), 
+              onPressed: () => _deleteBooking(b.id)
+            ),
+          ),
+        );
+      },
     );
   }
 }

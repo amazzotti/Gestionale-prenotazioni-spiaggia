@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:intl/intl.dart'; // Import aggiunto per risolvere l'errore
+import 'package:intl/intl.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // Import per la lingua
 import 'arrivi_oggi_screen.dart';
 import 'beach_editor_screen.dart';
 import 'map_screen.dart';
@@ -34,6 +35,15 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Gestionale Spiaggia B. Carla 98',
       debugShowCheckedModeBanner: false,
+      // Configurazione lingua Italiana
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('it', 'IT'),
+      ],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
@@ -208,6 +218,7 @@ class _HomeScreenState extends State<HomeScreen> {
       firstDate: DateTime.now().subtract(const Duration(days: 30)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       helpText: 'Seleziona il periodo di prenotazione',
+      locale: const Locale('it', 'IT'), // Forza lingua italiana nel picker
     );
     if (selectedRange != null && context.mounted) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors)));
@@ -240,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                   ElevatedButton(onPressed: () => _startNewBooking(context), child: const Text('Nuova Prenotazione')),
                   const SizedBox(height: 16),
-                  ElevatedButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen())), child: const Text('Arrivi di Oggi')),
+                  ElevatedButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen())), child: const Text('Arrivi')),
                   const SizedBox(height: 16),
                   ElevatedButton(onPressed: () => _showSearch(context), child: const Text('Modifica o Cancella Prenotazione')),
                   const SizedBox(height: 16),
@@ -290,7 +301,7 @@ class BookingSearchDelegate extends SearchDelegate<Booking?> {
         }
         return ListTile(
           title: Text('${booking.clientName} - Ombrellone: $displayId'),
-          subtitle: Text('Periodo: ${DateFormat('dd/MM/yy').format(booking.startDate)} - ${DateFormat('dd/MM/yy').format(booking.endDate)}\nSettore: ${booking.umbrellaId.split('-').first}'),
+          subtitle: Text('Periodo: ${DateFormat('dd/MM').format(booking.startDate)} - ${DateFormat('dd/MM').format(booking.endDate)}\nSettore: ${booking.umbrellaId.split('-').first}'),
           isThreeLine: true,
           onTap: () => close(context, booking),
         );

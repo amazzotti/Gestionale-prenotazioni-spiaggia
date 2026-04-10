@@ -23,15 +23,35 @@ class Booking {
   });
 
   factory Booking.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> map = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    
+    // Funzione di conversione ULTRA-ROBUSTA per le date
+    DateTime parseDate(dynamic d) {
+      if (d == null) return DateTime(2000);
+      if (d is Timestamp) return d.toDate();
+      if (d is String) {
+        DateTime? p = DateTime.tryParse(d);
+        if (p != null) return p;
+        try {
+          // Gestisce formato italiano dd/MM/yyyy
+          final parts = d.split('/');
+          if (parts.length == 3) return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        } catch (_) {}
+      }
+      if (d is int) return DateTime.fromMillisecondsSinceEpoch(d);
+      return DateTime(2000);
+    }
+
     return Booking(
       id: doc.id,
-      umbrellaId: map['umbrellaId'] ?? '',
-      clientName: map['clientName'] ?? '',
-      startDate: (map['startDate'] as Timestamp).toDate(),
-      endDate: (map['endDate'] as Timestamp).toDate(),
-      notes: map['notes'] ?? '',
-      arrived: map['arrived'] ?? false,
+      // Fallback su doc.id se umbrellaId manca (vecchio formato)
+      umbrellaId: (data['umbrellaId'] ?? data['id'] ?? doc.id).toString(),
+      // Fallback su vari nomi possibili per il cliente
+      clientName: (data['clientName'] ?? data['nome'] ?? data['cliente'] ?? data['name'] ?? 'Senza Nome').toString(),
+      startDate: parseDate(data['startDate'] ?? data['start_date'] ?? data['dataInizio'] ?? data['data_inizio']),
+      endDate: parseDate(data['endDate'] ?? data['end_date'] ?? data['dataFine'] ?? data['data_fine']),
+      notes: (data['notes'] ?? data['note'] ?? '').toString(),
+      arrived: data['arrived'] == true || data['arrivato'] == true,
     );
   }
 }
@@ -115,16 +135,16 @@ class _MapScreenState extends State<MapScreen> {
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome Cliente'), textCapitalization: TextCapitalization.words),
                 const SizedBox(height: 24),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Dal: ${DateFormat('dd/MM/yy').format(startDate)}'),
+                  Text('Dal: ${DateFormat('dd/MM').format(startDate)}'),
                   ElevatedButton(child: const Text('Seleziona'), onPressed: () async {
-                    final date = await showDatePicker(context: context, initialDate: startDate, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)));
+                    final date = await showDatePicker(context: context, initialDate: startDate, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)), locale: const Locale('it', 'IT'));
                     if (date != null) setDialogState(() { startDate = date; if (endDate.isBefore(startDate)) endDate = startDate; });
                   }),
                 ]),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Al: ${DateFormat('dd/MM/yy').format(endDate)}'),
+                  Text('Al: ${DateFormat('dd/MM').format(endDate)}'),
                   ElevatedButton(child: const Text('Seleziona'), onPressed: () async {
-                    final date = await showDatePicker(context: context, initialDate: endDate, firstDate: startDate, lastDate: DateTime.now().add(const Duration(days: 365)));
+                    final date = await showDatePicker(context: context, initialDate: endDate, firstDate: startDate, lastDate: DateTime.now().add(const Duration(days: 365)), locale: const Locale('it', 'IT'));
                     if (date != null) setDialogState(() => endDate = date);
                   }),
                 ]),
