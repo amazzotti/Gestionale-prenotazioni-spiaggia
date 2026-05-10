@@ -63,7 +63,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
-          isScrollable: false, // Assicura che le tab occupino tutto lo spazio
+          isScrollable: false,
           tabs: [
             const Tab(
               child: Padding(
@@ -108,8 +108,10 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
           return TabBarView(
             controller: _tabController,
             children: [
-              _buildList(allBookings, filterDate: DateTime.now(), onlyArrivals: true),
-              _buildList(allBookings, filterDate: _selectedDate, onlyArrivals: false),
+              // SCHEDA 1: Solo chi arriva oggi
+              _buildList(allBookings, filterDate: DateTime.now()),
+              // SCHEDA 2: Solo chi arriva nella data selezionata
+              _buildList(allBookings, filterDate: _selectedDate),
             ],
           );
         },
@@ -117,24 +119,24 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildList(List<Booking> bookings, {required DateTime filterDate, required bool onlyArrivals}) {
+  Widget _buildList(List<Booking> bookings, {required DateTime filterDate}) {
     final targetDate = DateTime(filterDate.year, filterDate.month, filterDate.day);
 
+    // FILTRO CORRETTO: Mostra solo chi inizia esattamente in questa data (Primo giorno)
     final filtered = bookings.where((b) {
       final start = DateTime(b.startDate.year, b.startDate.month, b.startDate.day);
-      final end = DateTime(b.endDate.year, b.endDate.month, b.endDate.day);
-      
-      if (onlyArrivals) {
-        return start.isAtSameMomentAs(targetDate);
-      } else {
-        return !targetDate.isBefore(start) && !targetDate.isAfter(end);
-      }
+      return start.isAtSameMomentAs(targetDate);
     }).toList();
 
     filtered.sort((a, b) => a.clientName.toLowerCase().compareTo(b.clientName.toLowerCase()));
 
     if (filtered.isEmpty) {
-      return const Center(child: Text('Nessuna prenotazione trovata per questa data.'));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text('Nessun arrivo previsto per il ${DateFormat('dd/MM/yyyy').format(targetDate)}', textAlign: TextAlign.center),
+        ),
+      );
     }
 
     return ListView.builder(
@@ -157,7 +159,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
                 color: b.arrived ? Colors.grey : null,
               )
             ),
-            subtitle: Text('Dal ${DateFormat('dd/MM').format(b.startDate)} al ${DateFormat('dd/MM').format(b.endDate)}\nSettore: ${b.umbrellaId.split('-').first}'),
+            subtitle: Text('Fino al ${DateFormat('dd/MM').format(b.endDate)}\nSettore: ${b.umbrellaId.split('-').first}'),
             isThreeLine: true,
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red), 

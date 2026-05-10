@@ -25,7 +25,6 @@ class Booking {
   factory Booking.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
-    // Funzione di conversione ULTRA-ROBUSTA per le date
     DateTime parseDate(dynamic d) {
       if (d == null) return DateTime(2000);
       if (d is Timestamp) return d.toDate();
@@ -33,7 +32,6 @@ class Booking {
         DateTime? p = DateTime.tryParse(d);
         if (p != null) return p;
         try {
-          // Gestisce formato italiano dd/MM/yyyy
           final parts = d.split('/');
           if (parts.length == 3) return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
         } catch (_) {}
@@ -44,9 +42,7 @@ class Booking {
 
     return Booking(
       id: doc.id,
-      // Fallback su doc.id se umbrellaId manca (vecchio formato)
       umbrellaId: (data['umbrellaId'] ?? data['id'] ?? doc.id).toString(),
-      // Fallback su vari nomi possibili per il cliente
       clientName: (data['clientName'] ?? data['nome'] ?? data['cliente'] ?? data['name'] ?? 'Senza Nome').toString(),
       startDate: parseDate(data['startDate'] ?? data['start_date'] ?? data['dataInizio'] ?? data['data_inizio']),
       endDate: parseDate(data['endDate'] ?? data['end_date'] ?? data['dataFine'] ?? data['data_fine']),
@@ -126,69 +122,172 @@ class _MapScreenState extends State<MapScreen> {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
-        return StatefulBuilder(builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text('Prenotazione Ombrellone ${umbrella.simpleId} (${umbrella.sectorName})'),
-            content: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome Cliente'), textCapitalization: TextCapitalization.words),
-                const SizedBox(height: 24),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Dal: ${DateFormat('dd/MM').format(startDate)}'),
-                  ElevatedButton(child: const Text('Seleziona'), onPressed: () async {
-                    final date = await showDatePicker(context: context, initialDate: startDate, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)), locale: const Locale('it', 'IT'));
-                    if (date != null) setDialogState(() { startDate = date; if (endDate.isBefore(startDate)) endDate = startDate; });
-                  }),
-                ]),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Al: ${DateFormat('dd/MM').format(endDate)}'),
-                  ElevatedButton(child: const Text('Seleziona'), onPressed: () async {
-                    final date = await showDatePicker(context: context, initialDate: endDate, firstDate: startDate, lastDate: DateTime.now().add(const Duration(days: 365)), locale: const Locale('it', 'IT'));
-                    if (date != null) setDialogState(() => endDate = date);
-                  }),
-                ]),
-                const SizedBox(height: 16),
-                TextField(controller: notesController, decoration: const InputDecoration(labelText: 'Note', border: OutlineInputBorder()), maxLines: 3),
-              ]),
-            ),
-            actions: [
-              if (currentBooking != null) TextButton(child: const Text('SPOSTA'), onPressed: () { Navigator.of(context).pop(); setState(() => _bookingToMove = currentBooking); }),
-              if (currentBooking != null) TextButton(child: const Text('CANCELLA', style: TextStyle(color: Colors.red)), onPressed: () { bookingsCollection.doc(currentBooking.id).delete(); Navigator.of(context).pop(); }),
-              TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
-              ElevatedButton(
-                child: Text(currentBooking == null ? 'SALVA' : 'AGGIORNA'),
-                onPressed: () {
-                  if (nameController.text.isNotEmpty) {
-                    final data = {
-                      'umbrellaId': umbrella.id,
-                      'clientName': nameController.text,
-                      'startDate': Timestamp.fromDate(startDate),
-                      'endDate': Timestamp.fromDate(endDate),
-                      'notes': notesController.text,
-                      'arrived': currentBooking?.arrived ?? false,
-                    };
-                    if (currentBooking != null) {
-                      bookingsCollection.doc(currentBooking.id).update(data);
-                    } else {
-                      bookingsCollection.add(data);
-                    }
-                    Navigator.of(context).pop();
-                  }
-                },
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: StatefulBuilder(builder: (context, setDialogState) {
+            return SingleChildScrollView(
+              // Questo impedisce la compressione e sposta tutto il modulo in su quando appare la tastiera
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                width: MediaQuery.of(context).size.width * 0.9,
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Ombrellone ${umbrella.simpleId}',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      'Settore: ${umbrella.sectorName}',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome Cliente',
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade100),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildDateRow('Dal:', startDate, (date) {
+                            setDialogState(() {
+                              startDate = date;
+                              if (endDate.isBefore(startDate)) endDate = startDate;
+                            });
+                          }),
+                          const Divider(),
+                          _buildDateRow('Al:', endDate, (date) {
+                            setDialogState(() => endDate = date);
+                          }),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Note',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 24),
+                    // Pulsanti disposti in Wrap: non andranno MAI in overflow
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        if (currentBooking != null)
+                          IconButton(
+                            onPressed: () {
+                              bookingsCollection.doc(currentBooking.id).delete();
+                              Navigator.of(context).pop();
+                            },
+                            icon: const Icon(Icons.delete_forever, color: Colors.red, size: 28),
+                            tooltip: 'ELIMINA',
+                          ),
+                        if (currentBooking != null)
+                          IconButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              setState(() => _bookingToMove = currentBooking);
+                            },
+                            icon: const Icon(Icons.move_up, color: Colors.orange, size: 28),
+                            tooltip: 'SPOSTA',
+                          ),
+                        TextButton(
+                          child: const Text('ANNULLA', style: TextStyle(fontSize: 16)),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          ),
+                          child: Text(currentBooking == null ? 'SALVA' : 'AGGIORNA', 
+                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            if (nameController.text.isNotEmpty) {
+                              final data = {
+                                'umbrellaId': umbrella.id,
+                                'clientName': nameController.text,
+                                'startDate': Timestamp.fromDate(startDate),
+                                'endDate': Timestamp.fromDate(endDate),
+                                'notes': notesController.text,
+                                'arrived': currentBooking?.arrived ?? false,
+                              };
+                              if (currentBooking != null) {
+                                bookingsCollection.doc(currentBooking.id).update(data);
+                              } else {
+                                bookingsCollection.add(data);
+                              }
+                              Navigator.of(context).pop();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
-          );
-        });
+            );
+          }),
+        );
       },
     ).then((_) => setState(() => _isHighlightPending = false));
+  }
+
+  Widget _buildDateRow(String label, DateTime date, Function(DateTime) onSelected) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        TextButton.icon(
+          icon: const Icon(Icons.calendar_today, size: 18),
+          label: Text(DateFormat('dd/MM/yyyy').format(date), style: const TextStyle(fontSize: 16)),
+          onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: date,
+              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+              locale: const Locale('it', 'IT'),
+            );
+            if (picked != null) onSelected(picked);
+          },
+        ),
+      ],
+    );
   }
 
   void _moveBooking(Umbrella newUmbrella) {
     if (_bookingToMove == null) return;
     bookingsCollection.doc(_bookingToMove!.id).update({'umbrellaId': newUmbrella.id}).then((_) {
-      setState(() => _bookingToMove = null);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Prenotazione spostata all\'ombrellone ${newUmbrella.simpleId}')));
+      if (mounted) {
+        setState(() => _bookingToMove = null);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Prenotazione spostata all\'ombrellone ${newUmbrella.simpleId}')));
+      }
     });
   }
 
@@ -271,7 +370,7 @@ class _MapScreenState extends State<MapScreen> {
             final col = index % sector.crossAxisCount;
             if (sector.walkwayColumns.contains(col)) return Container(decoration: BoxDecoration(color: Colors.brown.shade200, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.square_foot_rounded, size: 20, color: Colors.black54));
             final umbrella = umbrellaMap[index];
-            if (umbrella == null) return Container(decoration: BoxDecoration(color: Colors.grey.shade200.withOpacity(0.5), borderRadius: BorderRadius.circular(8)));
+            if (umbrella == null) return Container(decoration: BoxDecoration(color: Colors.grey.shade200.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(8)));
             final booking = _findBookingFor(umbrella, _filterDateRange, allBookings);
             return _buildUmbrella(umbrella, booking);
           },

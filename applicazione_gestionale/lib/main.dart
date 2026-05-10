@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_localizations/flutter_localizations.dart'; // Import per la lingua
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'arrivi_oggi_screen.dart';
 import 'beach_editor_screen.dart';
 import 'map_screen.dart';
@@ -16,8 +16,8 @@ void main() async {
 class StripedBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paintGreen = Paint()..color = Colors.green.withOpacity(0.1);
-    final paintWhite = Paint()..color = Colors.white.withOpacity(0.1);
+    final paintGreen = Paint()..color = Colors.green.withValues(alpha: 0.1);
+    final paintWhite = Paint()..color = Colors.white.withValues(alpha: 0.1);
     const stripeWidth = 30.0;
     for (double i = 0; i < size.width; i += stripeWidth * 2) {
       canvas.drawRect(Rect.fromLTWH(i, 0, stripeWidth, size.height), paintGreen);
@@ -35,7 +35,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Gestionale Spiaggia B. Carla 98',
       debugShowCheckedModeBanner: false,
-      // Configurazione lingua Italiana
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -93,7 +92,11 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }).toList();
         final sectorOrder = {'Mare': 1, 'Tende': 2, 'Dietro': 3};
-        sectors.sort((a, b) => (sectorOrder[a.name] ?? 99).compareTo(sectorOrder[b.name] ?? 99));
+        sectors.sort((a, b) {
+          final orderA = sectorOrder[a.name] ?? 99;
+          final orderB = sectorOrder[b.name] ?? 99;
+          return orderA.compareTo(orderB);
+        });
         if (mounted) setState(() => _beachSectors = sectors);
       } else {
         if (mounted) setState(() => _beachSectors = []);
@@ -134,15 +137,14 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Resettare la Stagione?'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
-              const SizedBox(height: 16),
-              TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
-            ],
-          ),
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
+            const SizedBox(height: 16),
+            TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
+          ],
         ),
         actions: [
           TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
@@ -175,15 +177,14 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Accesso Editor Spiaggia'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
-              const SizedBox(height: 16),
-              TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
-            ],
-          ),
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
+            const SizedBox(height: 16),
+            TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
+          ],
         ),
         actions: [
           TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop()),
@@ -218,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
       firstDate: DateTime.now().subtract(const Duration(days: 30)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       helpText: 'Seleziona il periodo di prenotazione',
-      locale: const Locale('it', 'IT'), // Forza lingua italiana nel picker
+      locale: const Locale('it', 'IT'),
     );
     if (selectedRange != null && context.mounted) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors)));
@@ -232,7 +233,6 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Bagni Carla 98'),
         backgroundColor: Colors.green,
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadBeachConfiguration, tooltip: 'Ricarica Mappa'),
           IconButton(icon: const Icon(Icons.search), onPressed: () => _showSearch(context), tooltip: 'Cerca Prenotazione'),
         ],
       ),
