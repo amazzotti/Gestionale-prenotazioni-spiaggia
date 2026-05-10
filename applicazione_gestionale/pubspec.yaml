@@ -22,17 +22,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  flutter_launcher_icons: ^0.13.1 # Strumento per l'icona
-
-# Configurazione dell'icona
-flutter_launcher_icons:
-  android: "launcher_icon"
-  ios: true
-  image_path: "assets/icona_app.png" # Qui dovrai mettere la tua immagine
-  adaptive_icon_background: "#4CAF50" # Colore di sfondo (Verde)
-  adaptive_icon_foreground: "assets/icona_app.png"
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/ # Abilita la cartella per l'immagine
