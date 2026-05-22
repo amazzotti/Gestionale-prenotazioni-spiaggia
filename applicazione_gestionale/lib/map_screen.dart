@@ -1,8 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-// --- MODELLI DATI ---
+// --- MODELLO DATI PRENOTAZIONE ---
 class Booking {
   final String id;
   final String umbrellaId;
@@ -23,7 +23,7 @@ class Booking {
   });
 
   factory Booking.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final data = doc.data() as Map<String, dynamic>;
     
     DateTime parseDate(dynamic d) {
       if (d == null) return DateTime(2000);
@@ -128,7 +128,6 @@ class _MapScreenState extends State<MapScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: StatefulBuilder(builder: (context, setDialogState) {
             return SingleChildScrollView(
-              // Questo impedisce la compressione e sposta tutto il modulo in su quando appare la tastiera
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
                 padding: const EdgeInsets.all(20),
@@ -192,7 +191,6 @@ class _MapScreenState extends State<MapScreen> {
                       maxLines: 2,
                     ),
                     const SizedBox(height: 24),
-                    // Pulsanti disposti in Wrap: non andranno MAI in overflow
                     Wrap(
                       alignment: WrapAlignment.end,
                       spacing: 12,
@@ -301,7 +299,17 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isMoveMode ? 'Sposta Prenotazione' : 'Mappa Spiaggia'),
-        actions: isMoveMode ? [] : [
+        actions: isMoveMode 
+          ? [
+              // Pulsante di annullamento spostamento spostato qui (X rossa in alto a destra)
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.red, size: 28),
+                tooltip: 'Annulla Spostamento',
+                onPressed: () => setState(() => _bookingToMove = null),
+              ),
+              const SizedBox(width: 8),
+            ]
+          : [
           DropdownButton<String>(
             value: _selectedSectorName,
             hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
@@ -320,7 +328,25 @@ class _MapScreenState extends State<MapScreen> {
       ),
       body: Column(
         children: [
-          if (isMoveMode) Container(padding: const EdgeInsets.all(12), color: Colors.orange.shade200, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.move_down, size: 20), const SizedBox(width: 8), Flexible(child: Text('SPOSTA: Seleziona un ombrellone libero', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900), overflow: TextOverflow.ellipsis))])),
+          if (isMoveMode) 
+            Container(
+              padding: const EdgeInsets.all(12), 
+              color: Colors.orange.shade200, 
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center, 
+                children: [
+                  const Icon(Icons.move_down, size: 20, color: Color(0xFF5D4037)), 
+                  const SizedBox(width: 8), 
+                  Flexible(
+                    child: Text(
+                      'SPOSTA: Seleziona un ombrellone libero', 
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF5D4037)), 
+                      overflow: TextOverflow.ellipsis
+                    )
+                  )
+                ]
+              )
+            ),
           if (_filterDateRange != null && !isMoveMode) Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: Colors.green.shade100, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text('Periodo: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade900)), Text('${DateFormat('dd/MM/yyyy').format(_filterDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_filterDateRange!.end)}', style: TextStyle(color: Colors.green.shade900))])),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -347,9 +373,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      floatingActionButton: isMoveMode
-          ? FloatingActionButton(onPressed: () => setState(() => _bookingToMove = null), tooltip: 'Annulla Spostamento', backgroundColor: Colors.red, child: const Icon(Icons.close))
-          : null,
+      // FAB rimosso per evitare che copra gli ombrelloni
     );
   }
 
