@@ -159,8 +159,21 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
                 color: b.arrived ? Colors.grey : null,
               )
             ),
-            subtitle: Text('Fino al ${DateFormat('dd/MM').format(b.endDate)}\nSettore: ${b.umbrellaId.split('-').first}'),
-            isThreeLine: true,
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Fino al ${DateFormat('dd/MM').format(b.endDate)} - Settore: ${b.umbrellaId.split('-').first}'),
+                if (b.notes.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(
+                      'Note: ${b.notes}',
+                      style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blueGrey, fontSize: 13),
+                    ),
+                  ),
+              ],
+            ),
+            isThreeLine: b.notes.isNotEmpty,
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red), 
               onPressed: () => _deleteBooking(b.id)
