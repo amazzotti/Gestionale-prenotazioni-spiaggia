@@ -92,6 +92,11 @@ class _MapScreenState extends State<MapScreen> {
   bool _isHighlightPending = true;
   String? _selectedSectorName;
 
+  // Stato per l'allungamento in un secondo ombrellone (Split)
+  DateTimeRange? _extraDaysRange;
+  String? _extraDaysClientName;
+  String? _extraDaysNotes;
+
   final CollectionReference bookingsCollection = FirebaseFirestore.instance.collection('bookings');
 
   @override
@@ -114,11 +119,12 @@ class _MapScreenState extends State<MapScreen> {
     return null;
   }
 
-  void _showBookingDialog(Umbrella umbrella, Booking? currentBooking) {
+  void _showBookingDialog(Umbrella umbrella, Booking? currentBooking, List<Booking> allBookings) {
     final nameController = TextEditingController(text: currentBooking?.clientName);
     final notesController = TextEditingController(text: currentBooking?.notes);
     DateTime startDate = currentBooking?.startDate ?? _filterDateRange?.start ?? DateTime.now();
     DateTime endDate = currentBooking?.endDate ?? _filterDateRange?.end ?? startDate;
+    String? overlapError;
 
     showDialog(
       context: context,
@@ -172,15 +178,36 @@ class _MapScreenState extends State<MapScreen> {
                             setDialogState(() {
                               startDate = date;
                               if (endDate.isBefore(startDate)) endDate = startDate;
+                              overlapError = null;
                             });
                           }),
                           const Divider(),
                           _buildDateRow('Al:', endDate, (date) {
-                            setDialogState(() => endDate = date);
+                            setDialogState(() {
+                              endDate = date;
+                              overlapError = null;
+                            });
                           }),
                         ],
                       ),
                     ),
+                    if (overlapError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            overlapError!,
+                            style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: notesController,
@@ -196,6 +223,28 @@ class _MapScreenState extends State<MapScreen> {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
+                        if (overlapError != null && currentBooking != null && endDate.isAfter(currentBooking.endDate))
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
+                            onPressed: () {
+                              final originalEnd = currentBooking.endDate;
+                              final extraStart = originalEnd.add(const Duration(days: 1));
+                              final extraRange = DateTimeRange(
+                                start: DateTime(extraStart.year, extraStart.month, extraStart.day),
+                                end: DateTime(endDate.year, endDate.month, endDate.day),
+                              );
+                              
+                              Navigator.of(context).pop();
+                              setState(() {
+                                _extraDaysRange = extraRange;
+                                _extraDaysClientName = nameController.text;
+                                _extraDaysNotes = notesController.text;
+                                _filterDateRange = extraRange; // Filtro mappa per i giorni extra
+                              });
+                            },
+                            icon: const Icon(Icons.add_to_photos, color: Colors.white, size: 18),
+                            label: const Text('ALLUNGA ALTROVE', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ),
                         if (currentBooking != null)
                           IconButton(
                             onPressed: () {
@@ -209,10 +258,14 @@ class _MapScreenState extends State<MapScreen> {
                           IconButton(
                             onPressed: () {
                               Navigator.of(context).pop();
-                              setState(() => _bookingToMove = currentBooking);
+                              setState(() {
+                                // Sincronizzo: sposta con le date allungate inserite nel dialog
+                                _filterDateRange = DateTimeRange(start: startDate, end: endDate);
+                                _bookingToMove = currentBooking;
+                              });
                             },
                             icon: const Icon(Icons.move_up, color: Colors.orange, size: 28),
-                            tooltip: 'SPOSTA',
+                            tooltip: 'SPOSTA TUTTO',
                           ),
                         TextButton(
                           child: const Text('ANNULLA', style: TextStyle(fontSize: 16)),
@@ -227,6 +280,30 @@ class _MapScreenState extends State<MapScreen> {
                                 style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                           onPressed: () {
                             if (nameController.text.isNotEmpty) {
+                              // Controllo sovrapposizioni
+                              Booking? conflict;
+                              final s1 = DateTime(startDate.year, startDate.month, startDate.day);
+                              final e1 = DateTime(endDate.year, endDate.month, endDate.day);
+
+                              for (var b in allBookings) {
+                                if (b.umbrellaId == umbrella.id && b.id != currentBooking?.id) {
+                                  final s2 = DateTime(b.startDate.year, b.startDate.month, b.startDate.day);
+                                  final e2 = DateTime(b.endDate.year, b.endDate.month, b.endDate.day);
+                                  
+                                  if (!(e1.isBefore(s2) || s1.isAfter(e2))) {
+                                    conflict = b;
+                                    break;
+                                  }
+                                }
+                              }
+
+                              if (conflict != null) {
+                                setDialogState(() {
+                                  overlapError = 'OCCUPATO: dal ${DateFormat('dd/MM').format(conflict!.startDate)} al ${DateFormat('dd/MM').format(conflict!.endDate)} da ${conflict!.clientName}';
+                                });
+                                return;
+                              }
+
                               final data = {
                                 'umbrellaId': umbrella.id,
                                 'clientName': nameController.text,
@@ -281,7 +358,15 @@ class _MapScreenState extends State<MapScreen> {
 
   void _moveBooking(Umbrella newUmbrella) {
     if (_bookingToMove == null) return;
-    bookingsCollection.doc(_bookingToMove!.id).update({'umbrellaId': newUmbrella.id}).then((_) {
+    // Uso le date del filtro (sincronizzate nel dialog)
+    final newStart = _filterDateRange?.start ?? _bookingToMove!.startDate;
+    final newEnd = _filterDateRange?.end ?? _bookingToMove!.endDate;
+
+    bookingsCollection.doc(_bookingToMove!.id).update({
+      'umbrellaId': newUmbrella.id,
+      'startDate': Timestamp.fromDate(newStart),
+      'endDate': Timestamp.fromDate(newEnd),
+    }).then((_) {
       if (mounted) {
         setState(() => _bookingToMove = null);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Prenotazione spostata all\'ombrellone ${newUmbrella.simpleId}')));
@@ -289,23 +374,42 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _createExtraBooking(Umbrella umbrella) {
+    if (_extraDaysRange == null) return;
+    bookingsCollection.add({
+      'umbrellaId': umbrella.id,
+      'clientName': _extraDaysClientName,
+      'startDate': Timestamp.fromDate(_extraDaysRange!.start),
+      'endDate': Timestamp.fromDate(_extraDaysRange!.end),
+      'notes': _extraDaysNotes ?? '',
+      'arrived': false,
+    }).then((_) {
+      if (mounted) {
+        setState(() {
+          _extraDaysRange = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Allungamento creato sull\'ombrellone ${umbrella.simpleId}')));
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isMoveMode = _bookingToMove != null;
+    bool isExtraMode = _extraDaysRange != null;
     final visibleSectors = _selectedSectorName == null
         ? widget.beachSectors
         : widget.beachSectors.where((s) => s.name == _selectedSectorName).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isMoveMode ? 'Sposta Prenotazione' : 'Mappa Spiaggia'),
-        actions: isMoveMode 
+        title: Text(isMoveMode ? 'Sposta Prenotazione' : (isExtraMode ? 'Allunga su altro Ombrellone' : 'Mappa Spiaggia')),
+        actions: (isMoveMode || isExtraMode) 
           ? [
-              // Pulsante di annullamento spostamento spostato qui (X rossa in alto a destra)
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.red, size: 28),
-                tooltip: 'Annulla Spostamento',
-                onPressed: () => setState(() => _bookingToMove = null),
+                tooltip: 'Annulla',
+                onPressed: () => setState(() { _bookingToMove = null; _extraDaysRange = null; }),
               ),
               const SizedBox(width: 8),
             ]
@@ -332,22 +436,68 @@ class _MapScreenState extends State<MapScreen> {
             Container(
               padding: const EdgeInsets.all(12), 
               color: Colors.orange.shade200, 
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center, 
+                    children: [
+                      const Icon(Icons.move_down, size: 20, color: Color(0xFF5D4037)), 
+                      const SizedBox(width: 8), 
+                      Flexible(
+                        child: Text(
+                          'SPOSTA: ${_bookingToMove!.clientName}', 
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF5D4037)), 
+                          overflow: TextOverflow.ellipsis
+                        )
+                      )
+                    ]
+                  ),
+                  Text(
+                    'Periodo: ${DateFormat('dd/MM').format(_filterDateRange!.start)} - ${DateFormat('dd/MM').format(_filterDateRange!.end)}',
+                    style: const TextStyle(color: Color(0xFF5D4037), fontSize: 13, fontWeight: FontWeight.bold),
+                  )
+                ],
+              )
+            ),
+          if (isExtraMode) 
+            Container(
+              padding: const EdgeInsets.all(12), 
+              color: Colors.blue.shade200, 
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center, 
+                    children: [
+                      const Icon(Icons.add_chart, size: 20, color: Colors.blueGrey), 
+                      const SizedBox(width: 8), 
+                      Flexible(
+                        child: Text(
+                          'ALLUNGA: Seleziona dove aggiungere i giorni extra', 
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey), 
+                          overflow: TextOverflow.ellipsis
+                        )
+                      )
+                    ]
+                  ),
+                  Text(
+                    'Periodo Extra: ${DateFormat('dd/MM').format(_extraDaysRange!.start)} - ${DateFormat('dd/MM').format(_extraDaysRange!.end)}',
+                    style: const TextStyle(color: Colors.blueGrey, fontSize: 13, fontWeight: FontWeight.bold),
+                  )
+                ],
+              )
+            ),
+          if (_filterDateRange != null && !isMoveMode && !isExtraMode) 
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), 
+              color: Colors.green.shade100, 
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center, 
                 children: [
-                  const Icon(Icons.move_down, size: 20, color: Color(0xFF5D4037)), 
-                  const SizedBox(width: 8), 
-                  Flexible(
-                    child: Text(
-                      'SPOSTA: Seleziona un ombrellone libero', 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF5D4037)), 
-                      overflow: TextOverflow.ellipsis
-                    )
-                  )
+                  Text('Periodo: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade900)), 
+                  Text('${DateFormat('dd/MM/yyyy').format(_filterDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_filterDateRange!.end)}', style: TextStyle(color: Colors.green.shade900))
                 ]
               )
             ),
-          if (_filterDateRange != null && !isMoveMode) Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: Colors.green.shade100, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text('Periodo: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade900)), Text('${DateFormat('dd/MM/yyyy').format(_filterDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_filterDateRange!.end)}', style: TextStyle(color: Colors.green.shade900))])),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: bookingsCollection.snapshots(),
@@ -360,7 +510,7 @@ class _MapScreenState extends State<MapScreen> {
                   try {
                     final umbrellaToHighlight = widget.beachSectors.expand((s) => s.umbrellas).firstWhere((u) => u.id == widget.highlightUmbrellaId);
                     final bookingToHighlight = _findBookingFor(umbrellaToHighlight, _filterDateRange ?? DateTimeRange(start: DateTime.now(), end: DateTime.now().add(const Duration(days: 1))), allBookings);
-                    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _showBookingDialog(umbrellaToHighlight, bookingToHighlight); });
+                    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _showBookingDialog(umbrellaToHighlight, bookingToHighlight, allBookings); });
                   } catch (e) {}
                 }
 
@@ -373,7 +523,6 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      // FAB rimosso per evitare che copra gli ombrelloni
     );
   }
 
@@ -396,27 +545,30 @@ class _MapScreenState extends State<MapScreen> {
             final umbrella = umbrellaMap[index];
             if (umbrella == null) return Container(decoration: BoxDecoration(color: Colors.grey.shade200.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(8)));
             final booking = _findBookingFor(umbrella, _filterDateRange, allBookings);
-            return _buildUmbrella(umbrella, booking);
+            return _buildUmbrella(umbrella, booking, allBookings);
           },
         ),
       ]),
     );
   }
 
-  Widget _buildUmbrella(Umbrella umbrella, Booking? booking) {
+  Widget _buildUmbrella(Umbrella umbrella, Booking? booking, List<Booking> allBookings) {
     final isBooked = booking != null;
     final color = isBooked ? Colors.red.shade400 : Colors.green.shade400;
     bool isMoveMode = _bookingToMove != null;
+    bool isExtraMode = _extraDaysRange != null;
     return GestureDetector(
       onTap: () {
-        if (isMoveMode) {
+        if (isExtraMode) {
+          if (!isBooked) _createExtraBooking(umbrella);
+        } else if (isMoveMode) {
           if (!isBooked) _moveBooking(umbrella);
         } else {
-          _showBookingDialog(umbrella, booking);
+          _showBookingDialog(umbrella, booking, allBookings);
         }
       },
       child: Opacity(
-        opacity: (isMoveMode && isBooked) ? 0.3 : 1.0,
+        opacity: ((isMoveMode || isExtraMode) && isBooked) ? 0.3 : 1.0,
         child: Container(
           decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
           child: Center(child: FittedBox(fit: BoxFit.scaleDown, child: Text(umbrella.simpleId, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)))),
