@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -20,6 +22,13 @@ class BookingValidationException implements Exception {
   const BookingValidationException(this.message);
   @override
   String toString() => message;
+}
+
+/// Senza connessione non si può controllare sul server che l'ombrellone sia libero:
+/// meglio non salvare che rischiare una doppia prenotazione.
+class BookingOfflineException extends BookingValidationException {
+  const BookingOfflineException()
+      : super('Nessuna connessione a internet: non posso controllare che l\'ombrellone sia libero. Riprova quando c\'è campo.');
 }
 
 /// Tutte le scritture sulle prenotazioni passano da qui:
@@ -84,15 +93,43 @@ class BookingService {
     );
   }
 
+  /// Solo per i test: simula l'assenza di connessione.
+  @visibleForTesting
+  bool debugOffline = false;
+
+  /// Le scritture aspettano la conferma del server al massimo così: se la connessione
+  /// cade, Firestore le tiene in coda e le invia da solo appena torna il campo.
+  static const Duration writeTimeout = Duration(seconds: 10);
+
+  Future<void> _write(Future<void> operation) async {
+    try {
+      await operation.timeout(writeTimeout);
+    } on TimeoutException {
+      debugPrint('Scrittura in coda: verrà inviata appena torna la connessione.');
+    }
+  }
+
   /// Prenotazioni di un ombrellone lette dal server (dati più aggiornati).
-  /// Senza connessione si usano quelle in memoria.
+  /// Senza connessione si rifiuta: meglio non salvare che rischiare una doppia prenotazione.
   Future<List<Booking>> _bookingsOfUmbrella(String umbrellaId) async {
+    if (debugOffline) throw const BookingOfflineException();
     try {
       final snap = await _col.where('umbrellaId', isEqualTo: umbrellaId).get(const GetOptions(source: Source.server));
       return snap.docs.map(Booking.fromFirestore).toList();
     } catch (e) {
-      debugPrint('Controllo sul server non riuscito, uso i dati in memoria: $e');
-      return (repository.bookings.value ?? const <Booking>[]).where((b) => b.umbrellaId == umbrellaId).toList();
+      debugPrint('Controllo sul server non riuscito: $e');
+      throw const BookingOfflineException();
+    }
+  }
+
+  /// true se la prenotazione esiste ancora sul server (un altro telefono potrebbe averla eliminata).
+  Future<bool> _existsOnServer(String id) async {
+    if (debugOffline) throw const BookingOfflineException();
+    try {
+      return (await _col.doc(id).get(const GetOptions(source: Source.server))).exists;
+    } catch (e) {
+      debugPrint('Controllo sul server non riuscito: $e');
+      throw const BookingOfflineException();
     }
   }
 
@@ -101,21 +138,49 @@ class BookingService {
     if (conflict != null) throw BookingConflictException(conflict);
   }
 
+  /// Campi che non si scrivono mai "in blocco": si cambiano con le loro azioni
+  /// (spunta arrivo, saldato) o solo se la scheda li ha davvero modificati.
+  static const _statusFields = {'arrived', 'paid'};
+
+  /// Solo i campi cambiati rispetto a come era la prenotazione quando è stata aperta.
+  /// Così una scheda aperta da tempo non annulla quello che un altro telefono ha fatto nel frattempo.
+  static Map<String, dynamic> changedFields(Booking original, Booking edited) {
+    final before = original.copyWith(startDate: dayOnly(original.startDate), endDate: dayOnly(original.endDate)).toFirestore();
+    final after = edited.toFirestore();
+    return {
+      for (final e in after.entries)
+        if (before[e.key] != e.value) e.key: e.value,
+    };
+  }
+
   /// Crea o aggiorna una prenotazione. Restituisce l'ID del documento.
-  Future<String> save(Booking booking) async {
+  ///
+  /// Per una modifica, [original] è la prenotazione com'era quando la scheda è stata aperta:
+  /// si scrivono solo i campi cambiati. Se la prenotazione nel frattempo è stata eliminata
+  /// da un altro telefono, non viene ricreata.
+  Future<String> save(Booking booking, {Booking? original}) async {
     final b = validate(booking);
     await ensureAvailable(b);
     if (b.id.isEmpty) {
-      final ref = await _col.add({...b.toFirestore(), ..._audit(create: true)});
+      final ref = _col.doc();
+      await _write(ref.set({...b.toFirestore(), ..._audit(create: true)}));
       return ref.id;
     }
-    await _col.doc(b.id).set({...b.toFirestore(), ..._audit()}, SetOptions(merge: true));
+    if (!await _existsOnServer(b.id)) {
+      throw const BookingValidationException('Questa prenotazione è stata eliminata da un altro telefono.');
+    }
+    final fields = original != null
+        ? changedFields(original, b)
+        : (b.toFirestore()..removeWhere((k, _) => _statusFields.contains(k)));
+    if (fields.isEmpty) return b.id;
+    await _write(_col.doc(b.id).update({...fields, ..._audit()}));
     return b.id;
   }
 
   /// Sposta la prenotazione su un altro ombrellone (e/o altre date).
-  Future<void> move(Booking booking, String newUmbrellaId, DateTimeRange range) async {
-    await save(booking.copyWith(umbrellaId: newUmbrellaId, startDate: range.start, endDate: range.end));
+  /// [original] è com'era la prenotazione prima delle modifiche fatte nella scheda (se ce ne sono).
+  Future<void> move(Booking booking, String newUmbrellaId, DateTimeRange range, {Booking? original}) async {
+    await save(booking.copyWith(umbrellaId: newUmbrellaId, startDate: range.start, endDate: range.end), original: original ?? booking);
   }
 
   /// Crea i giorni extra di una prenotazione su un altro ombrellone.
@@ -130,16 +195,16 @@ class BookingService {
     ));
   }
 
-  Future<void> setArrived(Booking b, bool arrived) => _col.doc(b.id).update({'arrived': arrived, ..._audit()});
+  Future<void> setArrived(Booking b, bool arrived) => _write(_col.doc(b.id).update({'arrived': arrived, ..._audit()}));
 
-  Future<void> setPaid(Booking b, bool paid) => _col.doc(b.id).update({'paid': paid, ..._audit()});
+  Future<void> setPaid(Booking b, bool paid) => _write(_col.doc(b.id).update({'paid': paid, ..._audit()}));
 
-  Future<void> delete(Booking b) => _col.doc(b.id).delete();
+  Future<void> delete(Booking b) => _write(_col.doc(b.id).delete());
 
   /// Ripristina una prenotazione appena eliminata (tasto "Annulla").
   Future<void> restore(Booking b) async {
     final clean = validate(b);
     await ensureAvailable(clean);
-    await _col.doc(b.id).set({...clean.toFirestore(), ..._audit(create: true)});
+    await _write(_col.doc(b.id).set({...clean.toFirestore(), ..._audit(create: true)}));
   }
 }

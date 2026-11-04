@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'booking_repository.dart';
 import 'availability.dart';
+import 'booking_repository.dart';
+import 'layout_repository.dart';
 import 'models.dart';
 
 class EditorUmbrella {
@@ -38,33 +39,74 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
   List<EditorUmbrella> _gridState = [];
   List<int> _walkwayColumns = [];
   int _crossAxisCount = 10;
+  int _rowCount = 10;
   final _rowsController = TextEditingController();
   final _colsController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _colsController.addListener(_updateGridDimensions);
-    _rowsController.addListener(_updateGridDimensions);
+  /// Ombrelloni presenti quando il settore è stato aperto (per controllare il salvataggio).
+  Set<String> _loadedIds = {};
+
+  FirebaseFirestore get _db => LayoutRepository.instance.db;
+
+  void _message(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  void _updateGridDimensions() {
-    final cols = int.tryParse(_colsController.text) ?? 1;
-    final rows = int.tryParse(_rowsController.text) ?? 1;
-    if (cols <= 0 || rows <= 0) return;
-
-    if (cols != _crossAxisCount || (rows * cols) != _gridState.length) {
-      setState(() {
-        _crossAxisCount = cols;
-        final newGrid = List.generate(rows * cols, (i) => EditorUmbrella(index: i));
-        for (final oldUmbrella in _gridState) {
-          if (oldUmbrella.isActive && oldUmbrella.index < newGrid.length) {
-            newGrid[oldUmbrella.index] = oldUmbrella;
-          }
-        }
-        _gridState = newGrid;
-      });
+  /// Applica righe e colonne scritte nei campi (tasto ✓ o Invio).
+  /// Ogni ombrellone resta nella sua riga e colonna; quelli con prenotazioni non si possono togliere.
+  Future<void> _applyDimensions() async {
+    final rows = int.tryParse(_rowsController.text.trim());
+    final cols = int.tryParse(_colsController.text.trim());
+    if (rows == null || cols == null || rows <= 0 || cols <= 0 || rows > 50 || cols > 50) {
+      _message('Righe e colonne devono essere numeri da 1 a 50.');
+      _rowsController.text = '$_rowCount';
+      _colsController.text = '$_crossAxisCount';
+      return;
     }
+    if (rows == _rowCount && cols == _crossAxisCount) return;
+
+    final active = {for (final u in _gridState) if (u.isActive && u.id != null) u.index: u.id!};
+    final result = resizeLayout(active, oldCols: _crossAxisCount, newRows: rows, newCols: cols);
+    if (result.dropped.isNotEmpty) {
+      if (BookingRepository.instance.bookings.value == null) {
+        _message('Prenotazioni in caricamento, riprova tra un attimo.');
+        return;
+      }
+      final withBookings = result.dropped.where((id) => _bookingsCount(id) > 0).map(umbrellaLabelFromId).toList();
+      if (withBookings.isNotEmpty) {
+        _message('Non si può: gli ombrelloni ${withBookings.join(', ')} hanno prenotazioni e uscirebbero dalla griglia.');
+        _rowsController.text = '$_rowCount';
+        _colsController.text = '$_crossAxisCount';
+        return;
+      }
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Togliere degli ombrelloni?'),
+          content: Text('Con $rows righe e $cols colonne questi ombrelloni escono dalla griglia: '
+              '${result.dropped.map(umbrellaLabelFromId).join(', ')}.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('ANNULLA')),
+            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('TOGLI')),
+          ],
+        ),
+      );
+      if (ok != true) {
+        _rowsController.text = '$_rowCount';
+        _colsController.text = '$_crossAxisCount';
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _gridState = List.generate(rows * cols, (i) => EditorUmbrella(index: i));
+      result.kept.forEach((index, id) => _gridState[index] = EditorUmbrella(id: id, isActive: true, index: index));
+      _walkwayColumns = _walkwayColumns.where((c) => c < cols).toList();
+      _rowCount = rows;
+      _crossAxisCount = cols;
+    });
   }
 
   Future<void> _loadLayoutForSector(String sector) async {
@@ -75,7 +117,7 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
     });
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('beachLayout').doc(sector).get();
+      final doc = await _db.collection('beachLayout').doc(sector).get();
       int rows = 10;
       int cols = 10;
       List<EditorUmbrella> newGrid;
@@ -113,7 +155,9 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
           _rowsController.text = rows.toString();
           _colsController.text = cols.toString();
           _crossAxisCount = cols;
+          _rowCount = rows;
           _gridState = newGrid;
+          _loadedIds = {for (final u in newGrid) if (u.isActive && u.id != null) u.id!};
         });
       }
     } catch (e) {
@@ -132,6 +176,10 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
   bool _canRemove(EditorUmbrella umbrella) {
     final id = umbrella.id;
     if (id == null) return true;
+    if (BookingRepository.instance.bookings.value == null) {
+      _message('Prenotazioni in caricamento, riprova tra un attimo.');
+      return false;
+    }
     final count = _bookingsCount(id);
     if (count == 0) return true;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -181,6 +229,12 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
 
   Future<void> _saveLayout() async {
     if (_selectedSector == null) return;
+    final activeIds = {for (final u in _gridState) if (u.isActive && u.id != null) u.id!};
+    final removedWithBookings = _loadedIds.difference(activeIds).where((id) => _bookingsCount(id) > 0).map(umbrellaLabelFromId).toList();
+    if (removedWithBookings.isNotEmpty) {
+      _message('Non salvo: gli ombrelloni ${removedWithBookings.join(', ')} hanno prenotazioni. Spostale prima.');
+      return;
+    }
     setState(() => _isLoading = true);
 
     try {
@@ -195,9 +249,9 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
       })
           .toList();
 
-      await FirebaseFirestore.instance.collection('beachLayout').doc(_selectedSector!).set({
+      await _db.collection('beachLayout').doc(_selectedSector!).set({
         'name': _selectedSector,
-        'rows': int.tryParse(_rowsController.text) ?? 10,
+        'rows': _rowCount,
         'crossAxisCount': _crossAxisCount,
         'umbrellas': activeUmbrellas,
         'walkwayColumns': _walkwayColumns,
@@ -244,7 +298,7 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
     setState(() => _isLoading = true);
     try {
       // Cancellazione a blocchi: un solo batch Firestore accetta al massimo 500 operazioni.
-      final layoutSnapshot = await FirebaseFirestore.instance.collection('beachLayout').get();
+      final layoutSnapshot = await _db.collection('beachLayout').get();
       await BookingRepository.instance.deleteInChunks(layoutSnapshot.docs.map((d) => d.reference).toList());
       await BookingRepository.instance.deleteAllBookings();
 
@@ -270,30 +324,41 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
     }
   }
 
-  void _showDeleteMapConfirmationDialog() {
-    showDialog(
+  Future<void> _showDeleteMapConfirmationDialog() async {
+    final confirmController = TextEditingController();
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancellare la Mappa?'),
-        content: const Text("Questa azione cancellerà TUTTI i settori della mappa e TUTTE le prenotazioni in modo irreversibile. Sei sicuro?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('ANNULLA')),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _deleteAllLayouts();
-            },
-            child: const Text('CANCELLA TUTTO', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Cancellare la Mappa?'),
+          scrollable: true,
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Questa azione cancellerà TUTTI i settori della mappa e TUTTE le prenotazioni in modo irreversibile.\n\n'
+                'Per confermare scrivi RESET qui sotto.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: confirmController,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (_) => setDialogState(() {}),
+              decoration: const InputDecoration(labelText: 'Scrivi RESET', border: OutlineInputBorder()),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('ANNULLA')),
+            TextButton(
+              onPressed: confirmController.text.trim().toUpperCase() == 'RESET' ? () => Navigator.of(dialogContext).pop(true) : null,
+              child: const Text('CANCELLA TUTTO', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
       ),
     );
+    confirmController.dispose();
+    if (ok == true) await _deleteAllLayouts();
   }
 
   @override
   void dispose() {
-    _rowsController.removeListener(_updateGridDimensions);
-    _colsController.removeListener(_updateGridDimensions);
     _rowsController.dispose();
     _colsController.dispose();
     super.dispose();
@@ -338,14 +403,35 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(child: TextField(controller: _rowsController, decoration: const InputDecoration(labelText: 'Righe', border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+              Expanded(
+                child: TextField(
+                  controller: _rowsController,
+                  decoration: const InputDecoration(labelText: 'Righe', border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (_) => _applyDimensions(),
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: TextField(controller: _colsController, decoration: const InputDecoration(labelText: 'Colonne', border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+              Expanded(
+                child: TextField(
+                  controller: _colsController,
+                  decoration: const InputDecoration(labelText: 'Colonne', border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (_) => _applyDimensions(),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.check_circle, size: 30),
+                color: Colors.green.shade700,
+                tooltip: 'Applica righe e colonne',
+                onPressed: _selectedSector == null ? null : _applyDimensions,
+              ),
             ]),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-            child: Text('Tap: Aggiungi/Rimuovi ombrellone. Tap Lungo: Imposta/Rimuovi passerella.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            child: Text('Tap: Aggiungi/Rimuovi ombrellone. Tap Lungo: Imposta/Rimuovi passerella. Righe e colonne: scrivi i numeri e premi ✓.',
+                style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
           const Divider(),
           if (_selectedSector == null)

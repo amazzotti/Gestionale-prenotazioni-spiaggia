@@ -8,6 +8,7 @@ import 'booking_service.dart';
 import 'help_screen.dart';
 import 'models.dart';
 import 'sector_guard.dart';
+import 'sector_style.dart';
 
 /// Planner a calendario: una riga per ombrellone, una colonna per giorno.
 ///
@@ -23,7 +24,10 @@ class PlannerScreen extends StatefulWidget {
   /// Periodo da evidenziare (es. quello scelto sulla mappa). Se null: oggi.
   final DateTimeRange? highlightRange;
 
-  const PlannerScreen({super.key, required this.beachSectors, this.highlightRange});
+  /// Settore da mostrare all'apertura (null = tutti).
+  final String? initialSector;
+
+  const PlannerScreen({super.key, required this.beachSectors, this.highlightRange, this.initialSector});
 
   @override
   State<PlannerScreen> createState() => _PlannerScreenState();
@@ -51,6 +55,9 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   /// Modalità "sposta" / "allunga altrove": si tocca la riga di destinazione.
   Booking? _moving;
+
+  /// Com'era la prenotazione prima delle modifiche nella scheda (per salvare solo i cambiamenti).
+  Booking? _movingOriginal;
   DateTimeRange? _movingRange;
   bool _isExtension = false;
 
@@ -66,6 +73,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         ? DateTimeRange(start: today, end: today)
         : DateTimeRange(start: dayOnly(widget.highlightRange!.start), end: dayOnly(widget.highlightRange!.end));
     _windowStart = _addDays(_highlight.start, -daysBeforeHighlight);
+    _selectedSectorName = widget.initialSector;
     _hBody.addListener(() {
       if (_hHeader.hasClients && _hHeader.offset != _hBody.offset) _hHeader.jumpTo(_hBody.offset);
     });
@@ -162,6 +170,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
       case BookingFormAction.move:
         setState(() {
           _moving = result.booking;
+          _movingOriginal = existing;
           _movingRange = result.range;
           _isExtension = false;
         });
@@ -215,7 +224,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         await _service.createExtension(b, target.id, range);
         _showMessage('Giorni extra di ${b.clientName} sull\'ombrellone ${target.simpleId}.');
       } else {
-        await _service.move(b, target.id, range);
+        await _service.move(b, target.id, range, original: _movingOriginal);
         _showMessage('${b.clientName} spostato sull\'ombrellone ${target.simpleId}.');
       }
       if (mounted) setState(() => _moving = null);
@@ -257,19 +266,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         title: Text(_inMode ? (_isExtension ? 'Allunga altrove' : 'Sposta') : 'Planner'),
         actions: _inMode
             ? [IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 28), tooltip: 'Annulla', onPressed: () => setState(() => _moving = null))]
-            : [
-                DropdownButton<String?>(
-                  value: _selectedSectorName,
-                  hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
-                  underline: const SizedBox.shrink(),
-                  onChanged: (v) => setState(() => _selectedSectorName = v),
-                  items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('Tutti')),
-                    ...widget.beachSectors.map((s) => DropdownMenuItem<String?>(value: s.name, child: Text(s.name))),
-                  ],
-                ),
-                const SizedBox(width: 8),
-              ],
+            : null,
       ),
       body: ValueListenableBuilder<List<Booking>?>(
         valueListenable: _repo.bookings,
@@ -277,6 +274,14 @@ class _PlannerScreenState extends State<PlannerScreen> {
           if (bookings == null) return const Center(child: CircularProgressIndicator());
           return Column(children: [
             if (_inMode) _modeBanner() else _periodBar(),
+            if (!_inMode)
+              SectorBar(
+                sectors: widget.beachSectors,
+                selected: _selectedSectorName,
+                range: _highlight,
+                bookings: bookings,
+                onSelected: (v) => setState(() => _selectedSectorName = v),
+              ),
             if (!_inMode) _hint(),
             _header(),
             Expanded(
@@ -407,9 +412,17 @@ class _PlannerScreenState extends State<PlannerScreen> {
         Container(
           height: sectorHeight,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.only(left: 6),
-          color: Colors.grey.shade200,
-          child: Text(sector.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.clip, softWrap: false),
+          padding: const EdgeInsets.only(left: 4),
+          color: SectorStyle.of(sector.name).color.withValues(alpha: 0.15),
+          child: Row(children: [
+            Icon(SectorStyle.of(sector.name).icon, size: 13, color: SectorStyle.of(sector.name).color),
+            const SizedBox(width: 2),
+            Flexible(
+              child: Text(sector.name,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: SectorStyle.of(sector.name).color),
+                  overflow: TextOverflow.clip, softWrap: false),
+            ),
+          ]),
         ),
         for (final u in _orderedUmbrellas(sector))
           Container(
@@ -424,7 +437,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
       ];
 
   List<Widget> _rows(BeachSector sector, List<Booking> all) => [
-        Container(height: sectorHeight, color: Colors.grey.shade200),
+        Container(height: sectorHeight, color: SectorStyle.of(sector.name).color.withValues(alpha: 0.15)),
         for (final u in _orderedUmbrellas(sector)) _row(u, all),
       ];
 

@@ -233,7 +233,7 @@ String bookingSummaryMessage(Booking b, {String beachName = 'Bagni Carla 98'}) {
 /// Numero del prossimo ombrellone nell'editor: il più alto già usato + 1 (come nella versione originale).
 int nextUmbrellaNumber(Iterable<int> used) => used.fold(0, (max, n) => n > max ? n : max) + 1;
 
-// ---------- Tutto diviso per settore (Mare, Tende, Dietro) ----------
+// ---------- Prenotazioni divise per settore (Mare, Tende, Dietro) ----------
 
 /// Raggruppa le prenotazioni per settore, nell'ordine della mappa (Mare, Tende, Dietro).
 /// Mantiene l'ordine delle prenotazioni dentro ogni settore.
@@ -253,14 +253,33 @@ List<(String, List<Booking>)> groupBySector(Iterable<Booking> list, List<BeachSe
   return [for (final n in names) (n, groups[n]!)];
 }
 
-/// Incassi di un settore.
-class SectorMoney {
-  final String sector;
-  final MoneySummary money;
-  const SectorMoney(this.sector, this.money);
+// ---------- Editor mappa ----------
+
+/// Risultato del ridimensionamento della griglia di un settore.
+class ResizeResult {
+  /// Nuova posizione -> ID dell'ombrellone.
+  final Map<int, String> kept;
+
+  /// Ombrelloni che finirebbero fuori dalla nuova griglia.
+  final List<String> dropped;
+
+  const ResizeResult(this.kept, this.dropped);
 }
 
-/// Incassato e da incassare, separati per settore.
-List<SectorMoney> moneyBySector(List<BeachSector> sectors, Iterable<Booking> all) => [
-      for (final s in BeachSector.sorted(sectors)) SectorMoney(s.name, moneySummary(all.where((b) => b.sectorName == s.name))),
-    ];
+/// Cambia righe/colonne di un settore tenendo ogni ombrellone nella SUA riga e colonna
+/// (prima la posizione veniva ricalcolata e la mappa si scombinava).
+ResizeResult resizeLayout(Map<int, String> active, {required int oldCols, required int newRows, required int newCols}) {
+  final kept = <int, String>{};
+  final dropped = <String>[];
+  final sorted = active.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+  for (final e in sorted) {
+    final row = e.key ~/ oldCols;
+    final col = e.key % oldCols;
+    if (row < newRows && col < newCols) {
+      kept[row * newCols + col] = e.value;
+    } else {
+      dropped.add(e.value);
+    }
+  }
+  return ResizeResult(kept, dropped);
+}

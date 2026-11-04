@@ -36,7 +36,14 @@ class BookingRepository {
   final ValueNotifier<List<Booking>?> bookings = ValueNotifier(null);
   final ValueNotifier<Object?> error = ValueNotifier(null);
 
+  /// Messaggio per l'admin se la conversione dei dati vecchi non è riuscita (null = tutto bene).
+  final ValueNotifier<String?> migrationProblem = ValueNotifier(null);
+
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
+
+  /// Ogni avvio ha un numero: se nel frattempo ne parte un altro, il vecchio si ferma
+  /// (così non restano mai due collegamenti aperti insieme).
+  int _generation = 0;
 
   CollectionReference<Map<String, dynamic>> get collection => db.collection('bookings');
   DocumentReference<Map<String, dynamic>> get _schemaDoc => db.collection('meta').doc('schema');
@@ -51,23 +58,38 @@ class BookingRepository {
   bool get isStarted => _sub != null;
 
   Future<void> start({required bool isAdmin}) async {
-    await stop();
+    final generation = ++_generation;
+    await _cancel();
     int version = 0;
+    var versionFromServer = false;
     try {
-      final meta = await _schemaDoc.get();
+      final meta = await _schemaDoc.get(const GetOptions(source: Source.server));
       version = (meta.data()?['version'] as num?)?.toInt() ?? 0;
+      versionFromServer = true;
     } catch (e) {
-      debugPrint('Lettura versione schema fallita: $e');
+      debugPrint('Versione schema non letta dal server ($e), provo la copia sul telefono.');
+      try {
+        final cached = await _schemaDoc.get(const GetOptions(source: Source.cache));
+        version = (cached.data()?['version'] as num?)?.toInt() ?? 0;
+      } catch (_) {
+        // nessuna copia: si legge tutta la collezione, così non sparisce nulla
+      }
     }
+    if (generation != _generation) return;
 
-    if (version < schemaVersion && isAdmin) {
+    // Si converte solo se il SERVER dice che serve (mai offline: le scritture resterebbero appese).
+    if (version < schemaVersion && isAdmin && versionFromServer) {
       try {
         await migrateToSchema2();
         version = schemaVersion;
+        migrationProblem.value = null;
       } catch (e) {
         debugPrint('Migrazione prenotazioni fallita: $e');
+        migrationProblem.value = 'Non sono riuscito a convertire le prenotazioni vecchie ($e). '
+            'L\'app funziona lo stesso; riprova riaprendola con la connessione.';
       }
     }
+    if (generation != _generation) return;
 
     // Finché i dati vecchi non sono stati convertiti si legge tutta la
     // collezione (ma sempre con un solo listener), così non sparisce nulla.
@@ -85,8 +107,14 @@ class BookingRepository {
   }
 
   Future<void> stop() async {
-    await _sub?.cancel();
+    _generation++;
+    await _cancel();
+  }
+
+  Future<void> _cancel() async {
+    final sub = _sub;
     _sub = null;
+    await sub?.cancel();
     bookings.value = null;
     error.value = null;
   }
@@ -109,8 +137,7 @@ class BookingRepository {
           data['clientName'] is String &&
           data.keys.every(standardKeys.contains);
       if (isStandard) continue;
-      var b = Booking.fromFirestore(doc);
-      if (b.endDate.isBefore(b.startDate)) b = b.copyWith(endDate: b.startDate);
+      final b = sanitizeLegacy(Booking.fromFirestore(doc));
       // set senza merge: elimina i vecchi campi con nomi diversi
       toFix[doc.reference] = {...b.toFirestore(), 'updatedAt': FieldValue.serverTimestamp(), 'updatedBy': 'migrazione'};
     }
@@ -124,6 +151,41 @@ class BookingRepository {
     }
     await _schemaDoc.set({'version': schemaVersion, 'migratedAt': FieldValue.serverTimestamp()});
     return entries.length;
+  }
+
+  /// Ripulisce una prenotazione vecchia perché rispetti le regole di sicurezza
+  /// (altrimenti un solo valore fuori misura farebbe fallire tutta la conversione).
+  static Booking sanitizeLegacy(Booking b) {
+    String cut(String v, int max) => v.length > max ? v.substring(0, max) : v;
+    final name = b.clientName.trim().isEmpty ? 'Senza nome' : cut(b.clientName.trim(), 100);
+    final umbrella = cut(b.umbrellaId.trim(), 40);
+    final price = (b.price != null && b.price! >= 0 && b.price! < 1000000) ? b.price : null;
+    final deposit = (b.deposit >= 0 && b.deposit < 1000000) ? b.deposit : 0.0;
+    final start = dayOnly(b.startDate);
+    var end = dayOnly(b.endDate);
+    if (end.isBefore(start)) end = start;
+    return Booking(
+      id: b.id,
+      umbrellaId: umbrella.isEmpty ? 'Senza-ombrellone' : umbrella,
+      clientName: name,
+      startDate: start,
+      endDate: end,
+      notes: cut(b.notes, 500),
+      arrived: b.arrived,
+      phone: cut(b.phone.trim(), 30),
+      price: price,
+      deposit: deposit,
+      paid: b.paid,
+    );
+  }
+
+  /// Reset di fine stagione: cancella le prenotazioni già finite (prima di oggi).
+  /// Quelle future (es. già inserite per l'anno dopo) restano, a meno di [includeFuture].
+  Future<int> deleteSeason({bool includeFuture = false}) async {
+    if (includeFuture) return deleteAllBookings();
+    final snap = await collection.where('endDate', isLessThan: Timestamp.fromDate(today)).get();
+    await deleteInChunks(snap.docs.map((d) => d.reference).toList());
+    return snap.docs.length;
   }
 
   /// Cancella TUTTE le prenotazioni (anche quelle delle stagioni passate).

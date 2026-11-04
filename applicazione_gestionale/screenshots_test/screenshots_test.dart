@@ -29,6 +29,7 @@ import 'package:applicazione_gestionale/layout_repository.dart';
 import 'package:applicazione_gestionale/main.dart';
 import 'package:applicazione_gestionale/map_screen.dart';
 import 'package:applicazione_gestionale/planner_screen.dart';
+import 'package:applicazione_gestionale/sector_style.dart';
 import 'package:applicazione_gestionale/stats_screen.dart';
 
 final today = DateTime(2027, 7, 14);
@@ -285,7 +286,8 @@ void main() {
 
   testWidgets('13 suggeritore', (tester) async {
     await phone(tester);
-    await tester.pumpWidget(app(MapScreen(beachSectors: sectors, filterDateRange: DateTimeRange(start: day(15), end: day(19)), openSuggestions: true)));
+    await tester.pumpWidget(app(MapScreen(
+        beachSectors: sectors, filterDateRange: DateTimeRange(start: day(15), end: day(19)), initialSector: 'Mare', openSuggestions: true)));
     await shot(tester, '13_suggeritore');
   });
 
@@ -293,5 +295,16 @@ void main() {
     await phone(tester);
     await tester.pumpWidget(app(const HelpScreen(initialTopic: HelpTopic.mappa)));
     await shot(tester, '14_guida');
+  });
+
+  testWidgets('15 scelta del settore', (tester) async {
+    await phone(tester);
+    await tester.pumpWidget(app(Builder(builder: (context) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        chooseSector(context, sectors: sectors, range: DateTimeRange(start: day(15), end: day(19)), bookings: repo.bookings.value!);
+      });
+      return const Scaffold(body: SizedBox.expand());
+    })));
+    await shot(tester, '15_scelta_settore');
   });
 }

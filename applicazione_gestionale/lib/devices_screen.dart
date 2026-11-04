@@ -16,7 +16,7 @@ class DevicesScreen extends StatelessWidget {
 
   Future<void> _approve(BuildContext context, AccessRequest request) async {
     final nameController = TextEditingController(text: request.name);
-    var role = DeviceRole.admin;
+    var role = DeviceRole.staff; // più sicuro: "Famiglia: tutto" va scelto apposta
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
@@ -33,7 +33,7 @@ class DevicesScreen extends StatelessWidget {
             ),
             RadioGroup<String>(
               groupValue: role,
-              onChanged: (v) => setState(() => role = v ?? DeviceRole.admin),
+              onChanged: (v) => setState(() => role = v ?? DeviceRole.staff),
               child: const Column(children: [
                 RadioListTile<String>(
                   contentPadding: EdgeInsets.zero,

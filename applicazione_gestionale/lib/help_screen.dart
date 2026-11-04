@@ -15,13 +15,14 @@ class _Topic {
 
 const _topics = <_Topic>[
   _Topic(HelpTopic.inizio, Icons.home_outlined, 'Per iniziare', [
-    'I tre settori, Mare, Tende e Dietro, sono sempre tenuti separati: riepiloghi, suggerimenti, arrivi e incassi sono divisi per settore.',
-    'In alto nella home vedi il riepilogo di oggi per ogni settore: ombrelloni occupati, arrivi e partenze.',
-    '"Nuova Prenotazione": scegli le date, poi l\'app ti consiglia dove metterla.',
+    'Le prenotazioni sono divise per settore: Mare (blu, onde), Tende (viola, tenda) e Dietro (verde acqua, ombrellone).',
+    'In alto nella home vedi il riepilogo di oggi: ombrelloni occupati, arrivi e partenze.',
+    '"Nuova Prenotazione": scegli le date, poi il settore (vedi subito quanti posti liberi ha), poi l\'app ti consiglia l\'ombrellone.',
     '"Mappa di Oggi" e "Planner" ti fanno vedere la spiaggia; "Cerca" trova un cliente per nome, telefono o numero di ombrellone.',
     'In fondo alla home c\'è la versione dell\'app (es. V1.0.0).',
   ]),
   _Topic(HelpTopic.mappa, Icons.map_outlined, 'La mappa', [
+    'Sotto la data c\'è la barra dei settori: Tutti, Mare, Tende, Dietro, con quanti ombrelloni sono liberi nel periodo. Tocca un settore per vedere solo quello.',
     'Verde = libero, rosso = occupato nel periodo che stai guardando.',
     'Sul quadrato vedi il periodo della prenotazione (data di arrivo sopra, partenza sotto).',
     'Il bollino arancione con l\'euro vuol dire che c\'è ancora da incassare, il bollino verde con la spunta che il cliente è arrivato.',
@@ -39,6 +40,7 @@ const _topics = <_Topic>[
     'Se sposti in un altro settore (per esempio da Tende a Mare) l\'app chiede conferma, perché i prezzi possono essere diversi.',
     'Il cestino elimina dopo una conferma; per qualche secondo puoi premere ANNULLA.',
     'L\'app non salva mai due prenotazioni sullo stesso ombrellone negli stessi giorni.',
+    'Senza campo l\'app non salva le prenotazioni (non può controllare che il posto sia libero): riprova quando torna la connessione.',
   ]),
   _Topic(HelpTopic.suggeritore, Icons.lightbulb_outline, 'Il suggeritore "Dove la metto?"', [
     'Si apre da solo dopo "Nuova Prenotazione", oppure con la lampadina in alto nella mappa.',
@@ -52,31 +54,32 @@ const _topics = <_Topic>[
     'Una riga per ombrellone, una colonna per giorno: il quadro di 4 settimane in un colpo d\'occhio.',
     'Barre rosse = prenotazioni nel periodo scelto, barre grigie = prima e dopo.',
     'Tocco su una barra per aprirla, tocco su uno spazio vuoto per prenotare da quel giorno.',
-    'Le righe sono divise per settore: Mare, poi Tende, poi Dietro. In alto puoi scegliere di vedere un solo settore.',
+    'Le righe sono divise per settore: Mare, poi Tende, poi Dietro. Con la barra dei settori puoi vedere un solo settore.',
     'Per spostare: tocca la barra, poi SPOSTA, poi la riga di destinazione. Le righe verdi sono quelle libere per quelle date nello stesso settore; per un altro settore l\'app chiede conferma.',
     'Le frecce cambiano settimana; trascina col dito per scorrere.',
   ]),
   _Topic(HelpTopic.arrivi, Icons.people_outline, 'Arrivi e partenze', [
-    'Chi arriva e chi parte nel giorno scelto (di default oggi), diviso per settore.',
+    'Chi arriva e chi parte nel giorno scelto (di default oggi), con ombrellone e settore.',
     'Spunta la casella quando il cliente arriva: sulla mappa compare il bollino verde.',
     'Tocca "Da incassare" per segnare il pagamento come saldato.',
   ]),
   _Topic(HelpTopic.incassi, Icons.bar_chart, 'Incassi e statistiche', [
     'Occupazione del giorno per settore, con le frecce per cambiare giorno.',
-    'Totale incassato e da incassare della stagione, e lo stesso diviso per settore.',
-    'Elenco di chi deve ancora pagare, diviso per settore: tocca l\'importo per segnarlo come saldato.',
+    'Totale incassato e da incassare della stagione.',
+    'Elenco di chi deve ancora pagare: tocca l\'importo per segnarlo come saldato.',
   ]),
   _Topic(HelpTopic.telefoni, Icons.smartphone, 'Telefoni e sicurezza', [
     'Non serve nessuna password: ogni telefono va approvato una volta sola.',
     'Un telefono nuovo mostra un codice e il tasto "Chiedi l\'accesso".',
     'Da "Telefoni" (solo famiglia) controlli il codice e premi APPROVA: il telefono si sblocca da solo.',
     'Puoi togliere l\'accesso a un telefono perso in qualsiasi momento.',
+    'Tieni sempre almeno due telefoni con "Famiglia: tutto": se uno si rompe, dall\'altro approvi quello nuovo.',
     'Chi non è approvato non vede nessun dato.',
   ]),
   _Topic(HelpTopic.stagione, Icons.settings_backup_restore, 'Mappa e fine stagione', [
-    'Editor Mappa (solo famiglia): costruisci i settori con righe, colonne e passerelle.',
+    'Editor Mappa (solo famiglia): costruisci i settori con righe, colonne e passerelle. Righe e colonne si applicano con il tasto verde accanto ai campi.',
     'Un ombrellone con prenotazioni non si può togliere: prima spostale.',
-    'Reset Stagione cancella tutte le prenotazioni: per sicurezza devi scrivere RESET.',
+    'Reset Stagione cancella le prenotazioni già finite; quelle future restano, a meno che spunti la casella. Per sicurezza devi scrivere RESET.',
   ]),
 ];
 

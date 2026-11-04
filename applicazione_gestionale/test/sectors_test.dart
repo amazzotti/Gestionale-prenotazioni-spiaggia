@@ -20,7 +20,7 @@ final sectors = [
 ];
 
 void main() {
-  group('Tutto diviso per settore', () {
+  group('Prenotazioni divise per settore', () {
     test('groupBySector: ordine Mare, Tende, Dietro anche senza mappa', () {
       final list = [b('Dietro-1'), b('Mare-2'), b('Tende-T1-1'), b('Mare-1')];
       final groups = groupBySector(list, const []);
@@ -28,21 +28,6 @@ void main() {
       expect(groups.first.$2.map((e) => e.umbrellaId), ['Mare-2', 'Mare-1'], reason: 'mantiene l\'ordine interno');
       expect(groupBySector(list, sectors).map((g) => g.$1), ['Mare', 'Tende', 'Dietro']);
       expect(groupBySector(const [], sectors), isEmpty);
-    });
-
-    test('moneyBySector: incassi separati per settore', () {
-      final list = [
-        b('Mare-1', price: 100, deposit: 30),
-        b('Mare-2', price: 50, paid: true),
-        b('Tende-T1-1', price: 900, deposit: 200),
-      ];
-      final m = {for (final s in moneyBySector(sectors, list)) s.sector: s.money};
-      expect(m.keys, ['Mare', 'Tende', 'Dietro']);
-      expect(m['Mare']!.collected, 80);
-      expect(m['Mare']!.due, 70);
-      expect(m['Tende']!.collected, 200);
-      expect(m['Tende']!.due, 700);
-      expect(m['Dietro']!.collected, 0);
     });
 
     test('suggestBySector: una classifica per settore, mai mescolati', () {
