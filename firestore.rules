@@ -1,0 +1,99 @@
+rules_version = '2';
+
+// Regole di sicurezza Firestore per il Gestionale Spiaggia.
+// Da incollare in Firebase Console -> Firestore Database -> Regole -> Pubblica.
+//
+// Niente login: ogni telefono entra in Firebase in modo anonimo e ha un codice
+// univoco. Vede i dati solo se il suo codice è un documento della collezione
+// `dispositivi`, con campo `ruolo`:
+//   - 'admin' -> tutto, compresi editor mappa, reset stagione e approvazione telefoni
+//   - 'staff' -> prenotazioni, arrivi e incassi
+// Un telefono nuovo può solo scrivere la propria richiesta in `richieste`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myDevice() {
+      return /databases/$(database)/documents/dispositivi/$(request.auth.uid);
+    }
+
+    function isStaff() {
+      return signedIn() && exists(myDevice());
+    }
+
+    function isAdmin() {
+      return isStaff() && get(myDevice()).data.ruolo == 'admin';
+    }
+
+    function optionalString(d, field, maxLen) {
+      return !(field in d) || (d[field] is string && d[field].size() <= maxLen);
+    }
+
+    function optionalBool(d, field) {
+      return !(field in d) || d[field] is bool;
+    }
+
+    function optionalAmount(d, field) {
+      return !(field in d) || d[field] == null || (d[field] is number && d[field] >= 0 && d[field] < 1000000);
+    }
+
+    // Una prenotazione valida: solo campi conosciuti, tipi giusti, fine >= inizio.
+    function validBooking(d) {
+      return d.keys().hasAll(['umbrellaId', 'clientName', 'startDate', 'endDate'])
+        && d.keys().hasOnly(['umbrellaId', 'clientName', 'startDate', 'endDate', 'notes', 'arrived',
+                             'phone', 'price', 'deposit', 'paid', 'createdAt', 'updatedAt', 'updatedBy'])
+        && d.umbrellaId is string && d.umbrellaId.size() > 0 && d.umbrellaId.size() <= 40
+        && d.clientName is string && d.clientName.size() > 0 && d.clientName.size() <= 100
+        && d.startDate is timestamp && d.endDate is timestamp && d.startDate <= d.endDate
+        && optionalString(d, 'notes', 500)
+        && optionalString(d, 'phone', 30)
+        && optionalString(d, 'updatedBy', 254)
+        && optionalBool(d, 'arrived')
+        && optionalBool(d, 'paid')
+        && optionalAmount(d, 'price')
+        && optionalAmount(d, 'deposit');
+    }
+
+    match /bookings/{bookingId} {
+      allow read, delete: if isStaff();
+      allow create, update: if isStaff() && validBooking(request.resource.data);
+    }
+
+    match /beachLayout/{sectorId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /meta/{docId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // Telefoni approvati: ognuno legge il proprio stato, solo gli admin approvano o tolgono.
+    match /dispositivi/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome', 'ruolo', 'approvatoIl', 'approvatoDa'])
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 40
+        && request.resource.data.ruolo in ['admin', 'staff'];
+      allow delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    // Richieste di accesso: un telefono scrive solo la propria, gli admin le vedono tutte.
+    match /richieste/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome', 'richiestoIl'])
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 40;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // Tutto il resto è chiuso.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

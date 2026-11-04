@@ -1,14 +1,25 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'arrivi_oggi_screen.dart';
-import 'beach_editor_screen.dart';
-import 'map_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
-void main() async {
+import 'app_version.dart';
+import 'arrivi_oggi_screen.dart';
+import 'auth_gate.dart';
+import 'availability.dart';
+import 'beach_editor_screen.dart';
+import 'booking_repository.dart';
+import 'devices_screen.dart';
+import 'help_screen.dart';
+import 'layout_repository.dart';
+import 'map_screen.dart';
+import 'planner_screen.dart';
+import 'stats_screen.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('it');
   await Firebase.initializeApp();
   runApp(const MyApp());
 }
@@ -24,12 +35,15 @@ class StripedBackgroundPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTWH(i + stripeWidth, 0, stripeWidth, size.height), paintWhite);
     }
   }
+
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Widget? home;
+  const MyApp({super.key, this.home});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -40,20 +54,22 @@ class MyApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('it', 'IT'),
-      ],
+      supportedLocales: const [Locale('it', 'IT')],
+      locale: const Locale('it', 'IT'),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: home ?? AuthGate(builder: (context, {required isAdmin}) => HomeScreen(isAdmin: isAdmin)),
     );
   }
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  /// Gli admin vedono anche Editor mappa e Reset stagione.
+  final bool isAdmin;
+  const HomeScreen({super.key, required this.isAdmin});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -72,35 +88,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('beachLayout').get();
-      if (snapshot.docs.isNotEmpty) {
-        final sectors = snapshot.docs.map((doc) {
-          final data = doc.data();
-          final sectorName = data['name'] as String;
-          final umbrellasData = (data['umbrellas'] as List<dynamic>);
-          final umbrellas = umbrellasData.map((u) {
-            final simpleId = u['id'];
-            final uniqueId = '$sectorName-$simpleId';
-            return Umbrella(id: uniqueId, sectorName: sectorName, index: u['index']);
-          }).toList();
-          return BeachSector(
-            name: sectorName,
-            rows: data['rows'],
-            crossAxisCount: data['crossAxisCount'],
-            umbrellas: umbrellas,
-            walkwayColumns: List<int>.from(data['walkwayColumns'] ?? []),
-          );
-        }).toList();
-        final sectorOrder = {'Mare': 1, 'Tende': 2, 'Dietro': 3};
-        sectors.sort((a, b) {
-          final orderA = sectorOrder[a.name] ?? 99;
-          final orderB = sectorOrder[b.name] ?? 99;
-          return orderA.compareTo(orderB);
-        });
-        if (mounted) setState(() => _beachSectors = sectors);
-      } else {
-        if (mounted) setState(() => _beachSectors = []);
-      }
+      final sectors = await LayoutRepository.instance.loadSectors();
+      if (mounted) setState(() => _beachSectors = sectors);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore caricamento mappa: $e')));
@@ -111,19 +100,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showSearch(BuildContext context) async {
-    if (_isLoading || _beachSectors.isEmpty) return;
-    final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
-    final allBookings = snapshot.docs.map((doc) => Booking.fromFirestore(doc)).toList();
-    if (!context.mounted) return;
-    final selectedBooking = await showSearch<Booking?>(context: context, delegate: BookingSearchDelegate(allBookings));
-    if (selectedBooking != null && context.mounted) {
+  bool _ensureMap(BuildContext context) {
+    if (_isLoading) return false;
+    if (_beachSectors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(widget.isAdmin ? 'Prima crea la mappa della spiaggia dall\'editor!' : 'La mappa della spiaggia non è ancora stata creata.'),
+      ));
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _showSearch(BuildContext context) async {
+    if (!_ensureMap(context)) return;
+    final allBookings = BookingRepository.instance.bookings.value;
+    if (allBookings == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prenotazioni in caricamento, riprova tra un attimo.')));
+      return;
+    }
+    final selected = await showSearch<Booking?>(context: context, delegate: BookingSearchDelegate(allBookings));
+    if (selected != null && context.mounted) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => MapScreen(
-            highlightUmbrellaId: selectedBooking.umbrellaId,
-            filterDateRange: DateTimeRange(start: selectedBooking.startDate, end: selectedBooking.endDate),
+            highlightUmbrellaId: selected.umbrellaId,
+            filterDateRange: selected.range,
             beachSectors: _beachSectors,
           ),
         ),
@@ -131,99 +133,128 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showResetDialog(BuildContext context) {
-    final passwordController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Resettare la Stagione?'),
-        scrollable: true,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE. Per confermare, inserisci la password.'),
-            const SizedBox(height: 16),
-            TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
-          ],
-        ),
-        actions: [
-          TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(context).pop()),
-          TextButton(
-            child: const Text('CONFERMA E CANCELLA', style: TextStyle(color: Colors.red)),
-            onPressed: () async {
-              if (passwordController.text == 'EstateSdraiata') {
-                final snapshot = await FirebaseFirestore.instance.collection('bookings').get();
-                for (var doc in snapshot.docs) { await doc.reference.delete(); }
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tutte le prenotazioni sono state cancellate.')));
-                }
-              } else {
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password errata.')));
-                }
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPasswordDialogForEditor(BuildContext context) {
-    final passwordController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Accesso Editor Spiaggia'),
-        scrollable: true,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Per modificare la mappa della spiaggia, inserisci la password.'),
-            const SizedBox(height: 16),
-            TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
-          ],
-        ),
-        actions: [
-          TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop()),
-          ElevatedButton(
-            child: const Text('CONFERMA'),
-            onPressed: () async {
-              if (passwordController.text == 'EstateSdraiata') {
-                Navigator.of(dialogContext).pop();
-                await Navigator.push(context, MaterialPageRoute(builder: (context) => const BeachEditorScreen()));
-                _loadBeachConfiguration();
-              } else {
-                Navigator.of(dialogContext).pop();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password errata.')));
-                }
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _startNewBooking(BuildContext context) async {
-    if (_isLoading) return;
-    if (_beachSectors.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prima crea una mappa della spiaggia dall\'editor!')));
-      return;
-    }
+  Future<void> _startNewBooking(BuildContext context) async {
+    if (!_ensureMap(context)) return;
     final selectedRange = await showDateRangePicker(
       context: context,
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      firstDate: BookingRepository.instance.windowStart,
+      lastDate: DateTime(DateTime.now().year + 2, 12, 31),
       helpText: 'Seleziona il periodo di prenotazione',
       locale: const Locale('it', 'IT'),
     );
     if (selectedRange != null && context.mounted) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors)));
+      Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors, openSuggestions: true)));
     }
+  }
+
+  void _openTodayMap(BuildContext context) {
+    if (!_ensureMap(context)) return;
+    Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(beachSectors: _beachSectors)));
+  }
+
+  void _openPlanner(BuildContext context) {
+    if (!_ensureMap(context)) return;
+    Navigator.push(context, MaterialPageRoute(builder: (context) => PlannerScreen(beachSectors: _beachSectors)));
+  }
+
+  void _openStats(BuildContext context) {
+    if (!_ensureMap(context)) return;
+    Navigator.push(context, MaterialPageRoute(builder: (context) => StatsScreen(beachSectors: _beachSectors)));
+  }
+
+  /// Reset stagione: solo admin, e bisogna scrivere RESET per confermare.
+  Future<void> _showResetDialog(BuildContext context) async {
+    final confirmController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Resettare la Stagione?'),
+          scrollable: true,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE.\n\nPer confermare scrivi RESET qui sotto.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: confirmController,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: const InputDecoration(labelText: 'Scrivi RESET', border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop(false)),
+            TextButton(
+              onPressed: confirmController.text.trim().toUpperCase() == 'RESET' ? () => Navigator.of(dialogContext).pop(true) : null,
+              child: const Text('CANCELLA TUTTO', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      ),
+    );
+    confirmController.dispose();
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final count = await BookingRepository.instance.deleteAllBookings();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Cancellate $count prenotazioni.')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore durante il reset: $e')));
+      }
+    }
+  }
+
+  Future<void> _openEditor(BuildContext context) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => const BeachEditorScreen()));
+    _loadBeachConfiguration();
+  }
+
+  Widget _todaySummary() {
+    return ValueListenableBuilder<List<Booking>?>(
+      valueListenable: BookingRepository.instance.bookings,
+      builder: (context, bookings, _) {
+        if (bookings == null || _beachSectors.isEmpty) return const SizedBox(height: 8);
+        final today = BookingRepository.instance.today;
+        // Tutto separato per settore: occupati, arrivi e partenze di Mare, Tende e Dietro.
+        final occupancy = occupancyOn(today, _beachSectors, bookings);
+        final arrivals = arrivalsOn(today, bookings);
+        final departures = departuresOn(today, bookings);
+        final headerStyle = TextStyle(fontSize: 12, color: Colors.grey.shade700);
+        final valueStyle = TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade900);
+        Widget cell(Widget child, {int flex = 1}) => Expanded(flex: flex, child: Center(child: child));
+        return Card(
+          color: Colors.white.withValues(alpha: 0.9),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            child: Column(children: [
+              Text('Oggi, ${DateFormat('EEEE d MMMM', 'it').format(today)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(children: [
+                const Expanded(flex: 2, child: SizedBox()),
+                cell(Text('occupati', style: headerStyle)),
+                cell(Text('arrivi', style: headerStyle)),
+                cell(Text('partenze', style: headerStyle)),
+              ]),
+              for (final o in occupancy)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Expanded(flex: 2, child: Text(o.sector, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                    cell(Text('${o.occupied}/${o.total}', style: valueStyle)),
+                    cell(Text('${arrivals.where((b) => b.sectorName == o.sector).length}', style: valueStyle)),
+                    cell(Text('${departures.where((b) => b.sectorName == o.sector).length}', style: valueStyle)),
+                  ]),
+                ),
+            ]),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -234,39 +265,66 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.green,
         actions: [
           IconButton(icon: const Icon(Icons.search), onPressed: () => _showSearch(context), tooltip: 'Cerca Prenotazione'),
+          IconButton(icon: const Icon(Icons.help_outline), tooltip: 'Guida', onPressed: () => HelpScreen.open(context)),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
-        children: [
-          CustomPaint(size: Size.infinite, painter: StripedBackgroundPainter()),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: 200, child: Center(child: Text('BAGNI CARLA 98', textAlign: TextAlign.center, style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.green.shade800)))),
-                  const SizedBox(height: 24),
-                  ElevatedButton(onPressed: () => _startNewBooking(context), child: const Text('Nuova Prenotazione')),
-                  const SizedBox(height: 16),
-                  ElevatedButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen())), child: const Text('Arrivi')),
-                  const SizedBox(height: 16),
-                  ElevatedButton(onPressed: () => _showSearch(context), child: const Text('Modifica o Cancella Prenotazione')),
-                  const SizedBox(height: 16),
-                  ElevatedButton(onPressed: () => _showPasswordDialogForEditor(context), child: const Text('Editor Mappa Spiaggia')),
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    onPressed: () => _showResetDialog(context),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
-                    child: const Text('Reset Stagione', style: TextStyle(color: Colors.white)),
+              children: [
+                CustomPaint(size: Size.infinite, painter: StripedBackgroundPainter()),
+                RefreshIndicator(
+                  onRefresh: _loadBeachConfiguration,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16.0),
+                    children: [
+                      SizedBox(
+                        height: 110,
+                        child: Center(
+                          child: Text('BAGNI CARLA 98',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
+                        ),
+                      ),
+                      _todaySummary(),
+                      const SizedBox(height: 16),
+                      _menuButton(Icons.add_circle_outline, 'Nuova Prenotazione', () => _startNewBooking(context)),
+                      _menuButton(Icons.map_outlined, 'Mappa di Oggi', () => _openTodayMap(context)),
+                      _menuButton(Icons.date_range, 'Planner (calendario)', () => _openPlanner(context)),
+                      _menuButton(Icons.people_outline, 'Arrivi e Partenze',
+                          () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen()))),
+                      _menuButton(Icons.search, 'Cerca, Modifica o Cancella', () => _showSearch(context)),
+                      _menuButton(Icons.bar_chart, 'Incassi e Statistiche', () => _openStats(context)),
+                      if (widget.isAdmin) ...[
+                        const Divider(height: 32),
+                        _menuButton(Icons.edit_location_alt_outlined, 'Editor Mappa Spiaggia', () => _openEditor(context)),
+                        _menuButton(Icons.smartphone, 'Telefoni',
+                            () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen()))),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => _showResetDialog(context),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+                          child: const Text('Reset Stagione', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      const AppVersionText(),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
+    );
+  }
+
+  Widget _menuButton(IconData icon, String label, VoidCallback onPressed) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label, style: const TextStyle(fontSize: 16)),
+        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), alignment: Alignment.centerLeft),
       ),
     );
   }
@@ -274,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class BookingSearchDelegate extends SearchDelegate<Booking?> {
   final List<Booking> allBookings;
-  BookingSearchDelegate(this.allBookings);
+  BookingSearchDelegate(this.allBookings) : super(searchFieldLabel: 'Nome, telefono o n° ombrellone');
 
   @override
   List<Widget>? buildActions(BuildContext context) => [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
@@ -286,22 +344,18 @@ class BookingSearchDelegate extends SearchDelegate<Booking?> {
   Widget buildSuggestions(BuildContext context) => _buildResultsList();
 
   Widget _buildResultsList() {
-    if (query.isEmpty) return const Center(child: Text('Digita un nome per cercare.'));
-    final results = allBookings.where((b) => b.clientName.toLowerCase().contains(query.toLowerCase()));
+    if (query.trim().isEmpty) return const Center(child: Text('Digita un nome, un telefono o il numero dell\'ombrellone.'));
+    final results = searchBookings(query, allBookings);
     if (results.isEmpty) return const Center(child: Text('Nessuna prenotazione trovata.'));
+    final fmt = DateFormat('dd/MM');
     return ListView.builder(
       itemCount: results.length,
       itemBuilder: (context, index) {
-        final booking = results.elementAt(index);
-        String displayId = booking.umbrellaId;
-        if (booking.umbrellaId.startsWith('Tende-')) {
-          displayId = booking.umbrellaId.replaceFirst('Tende-', '');
-        } else {
-          displayId = booking.umbrellaId.split('-').last;
-        }
+        final booking = results[index];
         return ListTile(
-          title: Text('${booking.clientName} - Ombrellone: $displayId'),
-          subtitle: Text('Periodo: ${DateFormat('dd/MM').format(booking.startDate)} - ${DateFormat('dd/MM').format(booking.endDate)}\nSettore: ${booking.umbrellaId.split('-').first}'),
+          title: Text('${booking.clientName} - Ombrellone: ${booking.umbrellaLabel}'),
+          subtitle: Text('Periodo: ${fmt.format(booking.startDate)} - ${fmt.format(booking.endDate)}\nSettore: ${booking.sectorName}'
+              '${booking.amountDue > 0 ? ' · da incassare ${formatEuro(booking.amountDue)}' : ''}'),
           isThreeLine: true,
           onTap: () => close(context, booking),
         );

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'booking_repository.dart';
+import 'availability.dart';
+import 'models.dart';
+
 class EditorUmbrella {
   String? id;
   bool isActive;
@@ -113,59 +117,65 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
         });
       }
     } catch (e) {
-      print("Errore caricamento layout: $e");
+      debugPrint("Errore caricamento layout: $e");
       if (mounted) setState(() => _gridState = []);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  /// Prenotazioni (stagione in corso) collegate a un ombrellone.
+  int _bookingsCount(String umbrellaId) =>
+      (BookingRepository.instance.bookings.value ?? const <Booking>[]).where((b) => b.umbrellaId == umbrellaId).length;
+
+  /// true se l'ombrellone si può togliere; altrimenti avvisa e restituisce false.
+  bool _canRemove(EditorUmbrella umbrella) {
+    final id = umbrella.id;
+    if (id == null) return true;
+    final count = _bookingsCount(id);
+    if (count == 0) return true;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('L\'ombrellone ${umbrella.simpleId} ha $count prenotazion${count == 1 ? 'e' : 'i'}: '
+          'spostale o eliminale prima di toglierlo dalla mappa.'),
+    ));
+    return false;
+  }
+
   void _onUmbrellaTap(int index) {
     if (_selectedSector == null) return;
     final umbrella = _gridState[index];
 
-    setState(() {
-      if (umbrella.isActive) {
-        if (umbrella.id != null) {
-          FirebaseFirestore.instance.collection('bookings').doc(umbrella.id!).delete();
-        }
+    if (umbrella.isActive) {
+      if (!_canRemove(umbrella)) return;
+      setState(() {
         umbrella.isActive = false;
         umbrella.id = null;
-      } else {
-        String newId;
+      });
+      return;
+    }
 
-        if (_selectedSector == 'Tende') {
-          // Logica speciale per il settore Tende
-          final row = index ~/ _crossAxisCount;
-          final prefix = 'T${row + 1}'; // Crea 'T1' o 'T2'
+    final String newId;
+    if (_selectedSector == 'Tende') {
+      // Le tende si numerano per fila: T1-1, T1-2... T2-1...
+      final row = index ~/ _crossAxisCount;
+      final prefix = 'T${row + 1}';
+      final used = _gridState
+          .where((u) => u.isActive && u.id != null && u.id!.split('-').length == 3 && u.id!.split('-')[1] == prefix)
+          .map((u) => int.tryParse(u.id!.split('-').last) ?? 0)
+          .toSet();
+      newId = 'Tende-$prefix-${nextUmbrellaNumber(used)}';
+    } else {
+      final sectorPrefix = _selectedSector!;
+      final used = _gridState
+          .where((u) => u.isActive && u.id != null && u.id!.startsWith('$sectorPrefix-'))
+          .map((u) => int.tryParse(u.simpleId) ?? 0)
+          .toSet();
+      newId = '$sectorPrefix-${nextUmbrellaNumber(used)}';
+    }
 
-          final activeInRow = _gridState.where((u) {
-            final id = u.id;
-            if (id == null || !u.isActive) return false;
-            final parts = id.split('-');
-            return parts.length == 3 && parts[0] == 'Tende' && parts[1] == prefix;
-          });
-
-          final maxIdInRow = activeInRow
-              .map((u) => int.tryParse(u.id!.split('-').last) ?? 0)
-              .fold(0, (max, current) => current > max ? current : max);
-
-          newId = 'Tende-$prefix-${maxIdInRow + 1}'; // Es. 'Tende-T1-1'
-        } else {
-          // Logica standard per Mare e Dietro
-          final sectorPrefix = _selectedSector!;
-          final activeInSector = _gridState.where((u) => u.isActive && u.id != null && u.id!.startsWith(sectorPrefix));
-
-          final maxId = activeInSector
-              .map((u) => int.tryParse(u.simpleId) ?? 0)
-              .fold(0, (max, current) => current > max ? current : max);
-
-          newId = '$sectorPrefix-${maxId + 1}'; // Es. 'Mare-51'
-        }
-
-        umbrella.id = newId;
-        umbrella.isActive = true;
-      }
+    setState(() {
+      umbrella.id = newId;
+      umbrella.isActive = true;
     });
   }
 
@@ -212,21 +222,20 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
 
   void _toggleWalkway(int index) {
     final col = index % _crossAxisCount;
+    if (_walkwayColumns.contains(col)) {
+      setState(() => _walkwayColumns.remove(col));
+      return;
+    }
+    // La passerella toglie gli ombrelloni della colonna: si blocca se qualcuno ha prenotazioni.
+    final inColumn = [for (var i = 0; i < _gridState.length; i++) if (i % _crossAxisCount == col) _gridState[i]];
+    for (final u in inColumn) {
+      if (u.isActive && !_canRemove(u)) return;
+    }
     setState(() {
-      if (_walkwayColumns.contains(col)) {
-        _walkwayColumns.remove(col);
-      } else {
-        _walkwayColumns.add(col);
-        for (int i = 0; i < _gridState.length; i++) {
-          if (i % _crossAxisCount == col) {
-            final umbrella = _gridState[i];
-            if (umbrella.isActive && umbrella.id != null) {
-              FirebaseFirestore.instance.collection('bookings').doc(umbrella.id!).delete();
-            }
-            umbrella.isActive = false;
-            umbrella.id = null;
-          }
-        }
+      _walkwayColumns.add(col);
+      for (final u in inColumn) {
+        u.isActive = false;
+        u.id = null;
       }
     });
   }
@@ -234,21 +243,10 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
   Future<void> _deleteAllLayouts() async {
     setState(() => _isLoading = true);
     try {
-      final batch = FirebaseFirestore.instance.batch();
-
-      final beachLayoutCollection = FirebaseFirestore.instance.collection('beachLayout');
-      final layoutSnapshot = await beachLayoutCollection.get();
-      for (final doc in layoutSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      final bookingsCollection = FirebaseFirestore.instance.collection('bookings');
-      final bookingsSnapshot = await bookingsCollection.get();
-      for (final doc in bookingsSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      await batch.commit();
+      // Cancellazione a blocchi: un solo batch Firestore accetta al massimo 500 operazioni.
+      final layoutSnapshot = await FirebaseFirestore.instance.collection('beachLayout').get();
+      await BookingRepository.instance.deleteInChunks(layoutSnapshot.docs.map((d) => d.reference).toList());
+      await BookingRepository.instance.deleteAllBookings();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -328,7 +326,7 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
               Expanded(
                 flex: 2,
                 child: DropdownButtonFormField<String>(
-                  value: _selectedSector,
+                  initialValue: _selectedSector,
                   hint: const Text('Settore'),
                   items: _sectors.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                   onChanged: (value) {
