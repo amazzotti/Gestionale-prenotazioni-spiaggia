@@ -21,9 +21,9 @@ App Flutter (`applicazione_gestionale/`) con Firebase Authentication e Cloud Fir
 |---|---|---|
 | ![Arrivi](screenshots/07_arrivi.png) | ![Statistiche](screenshots/08_statistiche.png) | ![Telefono in attesa](screenshots/09_attesa_approvazione.png) |
 
-| Telefoni (approvazione) |
-|---|
-| ![Telefoni](screenshots/10_telefoni.png) |
+| Telefoni (approvazione) | Planner | Planner: sposta |
+|---|---|---|
+| ![Telefoni](screenshots/10_telefoni.png) | ![Planner](screenshots/11_planner.png) | ![Planner sposta](screenshots/12_planner_sposta.png) |
 
 Le anteprime (dati di esempio, formato telefono) si rigenerano con:
 `cd applicazione_gestionale` e poi `flutter test screenshots_test --update-goldens`.
@@ -32,11 +32,17 @@ Le anteprime (dati di esempio, formato telefono) si rigenerano con:
 
 - **Mappa della spiaggia** per settori (Mare, Tende, Dietro), con passerelle e zoom.
   - Si apre sul giorno di oggi. Le frecce ◀ ▶ cambiano giorno, **OGGI** torna a oggi, toccando la data si sceglie un periodo.
-  - Legenda sempre visibile: verde = libero, arancione = occupato solo in parte, rosso = occupato.
+  - Legenda sempre visibile: verde = libero, rosso = occupato nel periodo.
     Sul quadrato compaiono il periodo della prenotazione, **€** se c'è da incassare e **✓** se il cliente è arrivato.
-  - **Pressione lunga** su un ombrellone: tutte le sue prenotazioni della stagione e il tasto "Prenota i giorni liberi".
+  - **Pressione lunga** su un ombrellone: chi c'era **prima**, chi c'è **nel periodo** e chi arriva **dopo**,
+    con i giorni liberi in mezzo, più tutta la stagione.
+- **Planner** (dalla home o dall'icona calendario nella mappa): una riga per ombrellone, una colonna per giorno.
+  Le prenotazioni sono barre con il nome: rosse quelle del periodo scelto, grigie quelle prima e dopo.
+  Tocco su una barra per modificarla, su uno spazio vuoto per prenotare. Per **spostare** si tocca la barra,
+  "Sposta" e poi la riga di destinazione: le righe libere per quelle date diventano verdi.
 - **Scheda prenotazione**: nome con completamento automatico dai clienti già visti, telefono con tasti **Chiama** e
   **WhatsApp** (con il riepilogo della prenotazione già scritto), date, prezzo, acconto, saldato, note.
+  Il riquadro **Prima / Dopo** mostra chi c'è su quell'ombrellone prima e dopo le date scelte.
   Si può spostare su un altro ombrellone o allungare altrove. Mostra chi ha fatto l'ultima modifica.
 - **Controllo doppie prenotazioni**: prima di ogni salvataggio l'app ricontrolla sul server che l'ombrellone sia libero,
   così due telefoni non possono prenotare lo stesso posto negli stessi giorni.
@@ -108,7 +114,7 @@ Lo script aumenta la versione, esegue i test, crea l'APK in `rilasci/`, fa commi
 | `lib/booking_repository.dart` | Lettura delle prenotazioni (un solo listener) e migrazione dati |
 | `lib/booking_service.dart` | Scritture: validazione, controllo conflitti sul server, chi ha modificato |
 | `lib/device_service.dart`, `lib/auth_gate.dart`, `lib/devices_screen.dart` | Accesso senza login: approvazione dei telefoni |
-| `lib/*_screen.dart`, `lib/booking_form.dart` | Schermate |
+| `lib/*_screen.dart`, `lib/booking_form.dart`, `lib/umbrella_timeline_view.dart` | Schermate (mappa, planner, scheda, arrivi, statistiche...) |
 
 ## Sviluppo e test
 

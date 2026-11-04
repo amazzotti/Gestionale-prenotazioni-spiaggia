@@ -129,6 +129,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('SPOSTA: Da Spostare · dal 10/07 al 12/07'), findsOneWidget);
 
+    // stessa riga di partenza: niente da fare
+    await tester.tapAt(rowPoint(tester, 'T1-1', 5));
+    await tester.pump();
+    expect(find.text('Da Spostare è già sull\'ombrellone T1-1: scegline un altro.'), findsOneWidget);
+
     // riga occupata: rifiutata
     await tester.runAsync(() async {
       await tester.tapAt(rowPoint(tester, 'T1-2', 0));

@@ -215,7 +215,7 @@ class _MapScreenState extends State<MapScreen> {
               ]
             : [
                 IconButton(
-                  icon: const Icon(Icons.view_timeline_outlined),
+                  icon: const Icon(Icons.date_range),
                   tooltip: 'Planner',
                   onPressed: () => Navigator.push(
                     context,

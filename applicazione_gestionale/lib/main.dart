@@ -280,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 16),
                       _menuButton(Icons.add_circle_outline, 'Nuova Prenotazione', () => _startNewBooking(context)),
                       _menuButton(Icons.map_outlined, 'Mappa di Oggi', () => _openTodayMap(context)),
-                      _menuButton(Icons.view_timeline_outlined, 'Planner (calendario)', () => _openPlanner(context)),
+                      _menuButton(Icons.date_range, 'Planner (calendario)', () => _openPlanner(context)),
                       _menuButton(Icons.people_outline, 'Arrivi e Partenze',
                           () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen()))),
                       _menuButton(Icons.search, 'Cerca, Modifica o Cancella', () => _showSearch(context)),

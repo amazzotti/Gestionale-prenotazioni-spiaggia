@@ -202,6 +202,10 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   Future<void> _placeOn(Umbrella target) async {
     final b = _moving!;
+    if (!_isExtension && target.id == b.umbrellaId) {
+      _showMessage('${b.clientName} è già sull\'ombrellone ${target.simpleId}: scegline un altro.');
+      return;
+    }
     final range = _movingRange ?? b.range;
     try {
       if (_isExtension) {
@@ -224,6 +228,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   /// In modalità sposta: true se l'ombrellone è libero per le date da piazzare.
   bool _fitsMoving(Umbrella u, List<Booking> all) {
     final b = _moving!;
+    if (!_isExtension && u.id == b.umbrellaId) return false; // è già lì
     final range = _movingRange ?? b.range;
     final candidate = Booking(
       id: _isExtension ? '' : b.id,

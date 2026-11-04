@@ -27,6 +27,7 @@ import 'package:applicazione_gestionale/devices_screen.dart';
 import 'package:applicazione_gestionale/layout_repository.dart';
 import 'package:applicazione_gestionale/main.dart';
 import 'package:applicazione_gestionale/map_screen.dart';
+import 'package:applicazione_gestionale/planner_screen.dart';
 import 'package:applicazione_gestionale/stats_screen.dart';
 
 final today = DateTime(2027, 7, 14);
@@ -263,5 +264,21 @@ void main() {
     await tester.pumpWidget(app(const DevicesScreen()));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await shot(tester, '10_telefoni');
+  });
+
+  testWidgets('11 planner', (tester) async {
+    await phone(tester);
+    await tester.pumpWidget(app(PlannerScreen(beachSectors: sectors)));
+    await shot(tester, '11_planner');
+  });
+
+  testWidgets('12 planner sposta', (tester) async {
+    await phone(tester);
+    await tester.pumpWidget(app(PlannerScreen(beachSectors: sectors)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bianchi Laura').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('SPOSTA SU ALTRO OMBRELLONE'));
+    await shot(tester, '12_planner_sposta');
   });
 }
