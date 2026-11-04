@@ -192,7 +192,7 @@ void main() {
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(app());
-      await tester.tap(find.text('Settore'));
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Mare').last);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
