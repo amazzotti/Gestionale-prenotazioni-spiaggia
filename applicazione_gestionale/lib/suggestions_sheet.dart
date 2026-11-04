@@ -76,7 +76,7 @@ class _SuggestionsPanelState extends State<SuggestionsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final days = widget.range.end.difference(widget.range.start).inDays + 1;
+    final days = daysBetween(widget.range.start, widget.range.end) + 1;
     final sectors = BeachSector.sorted(widget.sectors);
     final shown = _sector == null ? sectors : sectors.where((s) => s.name == _sector).toList();
     final groups = suggestBySector(

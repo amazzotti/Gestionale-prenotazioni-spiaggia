@@ -39,7 +39,9 @@ Prima le prenotazioni stavano su carta e su un programma per PC. Serviva qualcos
   restano per chi si ferma di più.
 - **Scheda prenotazione**: completamento automatico dei clienti, **Chiama** e **WhatsApp** con il riepilogo già scritto,
   prezzo / acconto / saldato, riquadro prima/dopo, sposta e allunga su un altro ombrellone.
-- **Nessuna doppia prenotazione**: prima di salvare, l'app ricontrolla sul server che l'ombrellone sia libero.
+- **Nessuna doppia prenotazione**: prima di salvare, l'app ricontrolla sul server che l'ombrellone sia libero
+  (senza connessione non salva). Una scheda aperta da tempo scrive solo i campi modificati, così non annulla quello che
+  un altro telefono ha fatto nel frattempo.
 - **Arrivi e partenze**, **incassi e statistiche** (occupazione per settore, chi deve ancora pagare), **ricerca** per nome,
   telefono o numero di ombrellone, eliminazione con **Annulla**.
 - **Guida "?"** integrata in ogni schermata e **versione** visibile (es. V1.0.0).
@@ -110,7 +112,8 @@ Le anteprime usano dati di esempio e si rigenerano con `flutter test screenshots
 7. Quando tutti i telefoni sono approvati: **Firestore Database → Regole**, incolla [`firestore.rules`](firestore.rules)
    e premi *Pubblica*.
 
-Se un telefono reinstalla l'app o ne cancella i dati, riceve un codice nuovo e va approvato di nuovo.
+Se un telefono reinstalla l'app o ne cancella i dati, riceve un codice nuovo e va approvato di nuovo:
+tieni sempre **almeno due telefoni** con il ruolo `admin`, così uno può approvare l'altro.
 
 | Ruolo | Prenotazioni, arrivi, incassi | Editor mappa, reset, telefoni |
 |---|---|---|

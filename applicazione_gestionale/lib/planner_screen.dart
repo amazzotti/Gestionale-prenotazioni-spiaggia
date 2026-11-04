@@ -55,6 +55,9 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   /// Modalità "sposta" / "allunga altrove": si tocca la riga di destinazione.
   Booking? _moving;
+
+  /// Com'era la prenotazione prima delle modifiche nella scheda (per salvare solo i cambiamenti).
+  Booking? _movingOriginal;
   DateTimeRange? _movingRange;
   bool _isExtension = false;
 
@@ -167,6 +170,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
       case BookingFormAction.move:
         setState(() {
           _moving = result.booking;
+          _movingOriginal = existing;
           _movingRange = result.range;
           _isExtension = false;
         });
@@ -220,7 +224,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         await _service.createExtension(b, target.id, range);
         _showMessage('Giorni extra di ${b.clientName} sull\'ombrellone ${target.simpleId}.');
       } else {
-        await _service.move(b, target.id, range);
+        await _service.move(b, target.id, range, original: _movingOriginal);
         _showMessage('${b.clientName} spostato sull\'ombrellone ${target.simpleId}.');
       }
       if (mounted) setState(() => _moving = null);

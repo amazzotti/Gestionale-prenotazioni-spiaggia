@@ -178,8 +178,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Reset stagione: solo admin, e bisogna scrivere RESET per confermare.
+  /// Reset di fine stagione: solo admin, bisogna scrivere RESET.
+  /// Di default cancella le prenotazioni già finite; quelle future restano (casella per cancellarle).
   Future<void> _showResetDialog(BuildContext context) async {
     final confirmController = TextEditingController();
+    final repo = BookingRepository.instance;
+    final today = repo.today;
+    final future = (repo.bookings.value ?? const <Booking>[]).where((b) => !dayOnly(b.endDate).isBefore(today)).length;
+    var includeFuture = false;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -188,9 +194,19 @@ class _HomeScreenState extends State<HomeScreen> {
           scrollable: true,
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Questa azione cancellerà TUTTE le prenotazioni in modo PERMANENTE.\n\nPer confermare scrivi RESET qui sotto.'),
-              const SizedBox(height: 16),
+              const Text('Cancella in modo PERMANENTE tutte le prenotazioni già finite (fino a ieri).'),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: includeFuture,
+                onChanged: (v) => setDialogState(() => includeFuture = v ?? false),
+                title: Text('Cancella anche quelle da oggi in poi ($future)'),
+                subtitle: const Text('Lascialo spento se hai già inserito prenotazioni future.'),
+              ),
+              const SizedBox(height: 8),
+              const Text('Per confermare scrivi RESET qui sotto.'),
+              const SizedBox(height: 8),
               TextField(
                 controller: confirmController,
                 textCapitalization: TextCapitalization.characters,
@@ -203,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
             TextButton(child: const Text('ANNULLA'), onPressed: () => Navigator.of(dialogContext).pop(false)),
             TextButton(
               onPressed: confirmController.text.trim().toUpperCase() == 'RESET' ? () => Navigator.of(dialogContext).pop(true) : null,
-              child: const Text('CANCELLA TUTTO', style: TextStyle(color: Colors.red)),
+              child: const Text('CANCELLA', style: TextStyle(color: Colors.red)),
             ),
           ],
         ),
@@ -213,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (confirmed != true || !context.mounted) return;
 
     try {
-      final count = await BookingRepository.instance.deleteAllBookings();
+      final count = await repo.deleteSeason(includeFuture: includeFuture);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Cancellate $count prenotazioni.')));
       }
@@ -293,6 +309,19 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
                         ),
                       ),
+                      if (widget.isAdmin)
+                        ValueListenableBuilder<String?>(
+                          valueListenable: BookingRepository.instance.migrationProblem,
+                          builder: (context, problem, _) => problem == null
+                              ? const SizedBox.shrink()
+                              : Card(
+                                  color: Colors.orange.shade50,
+                                  child: ListTile(
+                                    leading: Icon(Icons.warning_amber, color: Colors.orange.shade900),
+                                    title: Text(problem, style: const TextStyle(fontSize: 13)),
+                                  ),
+                                ),
+                        ),
                       _todaySummary(),
                       const SizedBox(height: 16),
                       _menuButton(Icons.add_circle_outline, 'Nuova Prenotazione', () => _startNewBooking(context)),

@@ -4,6 +4,14 @@ import 'package:flutter/material.dart';
 /// Normalizza una data a mezzanotte (ignora ore e minuti).
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+/// Giorni di calendario da [a] a [b] (0 = stesso giorno). Calcolato in UTC,
+/// così non sbaglia di un giorno al cambio dell'ora legale.
+int daysBetween(DateTime a, DateTime b) =>
+    DateTime.utc(b.year, b.month, b.day).difference(DateTime.utc(a.year, a.month, a.day)).inDays;
+
+/// Il giorno dopo (o prima, con [n] negativo), senza problemi di ora legale.
+DateTime addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+
 /// Stato del pagamento di una prenotazione.
 enum PaymentStatus {
   /// Nessun prezzo inserito.
@@ -147,7 +155,7 @@ class Booking {
   DateTimeRange get range => DateTimeRange(start: dayOnly(startDate), end: dayOnly(endDate));
 
   /// Numero di giorni prenotati (primo e ultimo inclusi).
-  int get days => dayOnly(endDate).difference(dayOnly(startDate)).inDays + 1;
+  int get days => daysBetween(startDate, endDate) + 1;
 
   /// true se la prenotazione occupa almeno un giorno dell'intervallo.
   bool overlaps(DateTimeRange r) =>

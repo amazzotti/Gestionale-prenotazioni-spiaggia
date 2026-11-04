@@ -135,7 +135,7 @@ Future<String?> chooseSector(
   required DateTimeRange range,
   required List<Booking> bookings,
 }) {
-  final days = range.end.difference(range.start).inDays + 1;
+  final days = daysBetween(range.start, range.end) + 1;
   String two(int n) => n.toString().padLeft(2, '0');
   final period = 'dal ${two(range.start.day)}/${two(range.start.month)} al ${two(range.end.day)}/${two(range.end.month)}';
   return showModalBottomSheet<String>(

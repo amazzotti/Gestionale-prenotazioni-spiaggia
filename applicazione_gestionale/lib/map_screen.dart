@@ -60,6 +60,9 @@ class _MapScreenState extends State<MapScreen> {
   Booking? _bookingToMove;
   DateTimeRange? _moveRange;
 
+  /// Com'era la prenotazione prima delle modifiche nella scheda (per salvare solo i cambiamenti).
+  Booking? _moveOriginal;
+
   /// Modalità "allunga altrove": si tocca un ombrellone libero per i giorni extra.
   Booking? _extendOriginal;
   DateTimeRange? _extraDaysRange;
@@ -156,6 +159,7 @@ class _MapScreenState extends State<MapScreen> {
       case BookingFormAction.move:
         setState(() {
           _bookingToMove = result.booking;
+          _moveOriginal = existing;
           _moveRange = result.range;
         });
       case BookingFormAction.extendElsewhere:
@@ -199,8 +203,10 @@ class _MapScreenState extends State<MapScreen> {
     final range = _moveRange ?? booking.range;
     if (!await confirmSectorChange(context, booking, target)) return;
     try {
-      await _service.move(booking, target.id, range);
+      await _service.move(booking, target.id, range, original: _moveOriginal);
+      if (!mounted) return;
       setState(() {
+        _moveOriginal = null;
         _bookingToMove = null;
         _moveRange = null;
       });
@@ -218,6 +224,7 @@ class _MapScreenState extends State<MapScreen> {
     if (!await confirmSectorChange(context, _extendOriginal!, target, extension: true)) return;
     try {
       await _service.createExtension(_extendOriginal!, target.id, _extraDaysRange!);
+      if (!mounted) return;
       setState(() {
         _extendOriginal = null;
         _extraDaysRange = null;

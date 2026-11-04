@@ -40,6 +40,7 @@ const _topics = <_Topic>[
     'Se sposti in un altro settore (per esempio da Tende a Mare) l\'app chiede conferma, perché i prezzi possono essere diversi.',
     'Il cestino elimina dopo una conferma; per qualche secondo puoi premere ANNULLA.',
     'L\'app non salva mai due prenotazioni sullo stesso ombrellone negli stessi giorni.',
+    'Senza campo l\'app non salva le prenotazioni (non può controllare che il posto sia libero): riprova quando torna la connessione.',
   ]),
   _Topic(HelpTopic.suggeritore, Icons.lightbulb_outline, 'Il suggeritore "Dove la metto?"', [
     'Si apre da solo dopo "Nuova Prenotazione", oppure con la lampadina in alto nella mappa.',
@@ -72,12 +73,13 @@ const _topics = <_Topic>[
     'Un telefono nuovo mostra un codice e il tasto "Chiedi l\'accesso".',
     'Da "Telefoni" (solo famiglia) controlli il codice e premi APPROVA: il telefono si sblocca da solo.',
     'Puoi togliere l\'accesso a un telefono perso in qualsiasi momento.',
+    'Tieni sempre almeno due telefoni con "Famiglia: tutto": se uno si rompe, dall\'altro approvi quello nuovo.',
     'Chi non è approvato non vede nessun dato.',
   ]),
   _Topic(HelpTopic.stagione, Icons.settings_backup_restore, 'Mappa e fine stagione', [
-    'Editor Mappa (solo famiglia): costruisci i settori con righe, colonne e passerelle.',
+    'Editor Mappa (solo famiglia): costruisci i settori con righe, colonne e passerelle. Righe e colonne si applicano con il tasto verde accanto ai campi.',
     'Un ombrellone con prenotazioni non si può togliere: prima spostale.',
-    'Reset Stagione cancella tutte le prenotazioni: per sicurezza devi scrivere RESET.',
+    'Reset Stagione cancella le prenotazioni già finite; quelle future restano, a meno che spunti la casella. Per sicurezza devi scrivere RESET.',
   ]),
 ];
 

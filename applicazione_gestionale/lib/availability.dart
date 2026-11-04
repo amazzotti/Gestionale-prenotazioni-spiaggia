@@ -252,3 +252,34 @@ List<(String, List<Booking>)> groupBySector(Iterable<Booking> list, List<BeachSe
   final names = groups.keys.toList()..sort((a, b) => rank(a) != rank(b) ? rank(a).compareTo(rank(b)) : a.compareTo(b));
   return [for (final n in names) (n, groups[n]!)];
 }
+
+// ---------- Editor mappa ----------
+
+/// Risultato del ridimensionamento della griglia di un settore.
+class ResizeResult {
+  /// Nuova posizione -> ID dell'ombrellone.
+  final Map<int, String> kept;
+
+  /// Ombrelloni che finirebbero fuori dalla nuova griglia.
+  final List<String> dropped;
+
+  const ResizeResult(this.kept, this.dropped);
+}
+
+/// Cambia righe/colonne di un settore tenendo ogni ombrellone nella SUA riga e colonna
+/// (prima la posizione veniva ricalcolata e la mappa si scombinava).
+ResizeResult resizeLayout(Map<int, String> active, {required int oldCols, required int newRows, required int newCols}) {
+  final kept = <int, String>{};
+  final dropped = <String>[];
+  final sorted = active.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+  for (final e in sorted) {
+    final row = e.key ~/ oldCols;
+    final col = e.key % oldCols;
+    if (row < newRows && col < newCols) {
+      kept[row * newCols + col] = e.value;
+    } else {
+      dropped.add(e.value);
+    }
+  }
+  return ResizeResult(kept, dropped);
+}

@@ -179,17 +179,19 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
       _conflict = null;
     });
     try {
-      await BookingService.instance.save(candidate);
+      // Solo i campi cambiati rispetto a quando la scheda è stata aperta.
+      await BookingService.instance.save(candidate, original: _existing);
       if (mounted) Navigator.of(context).pop(BookingFormResult(BookingFormAction.saved, candidate));
     } on BookingConflictException catch (e) {
+      if (!mounted) return;
       setState(() {
         _conflict = e.conflict;
         _error = 'OCCUPATO: dal ${_shortFmt.format(e.conflict.startDate)} al ${_shortFmt.format(e.conflict.endDate)} da ${e.conflict.clientName}';
       });
     } on BookingValidationException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Errore nel salvataggio: $e');
+      if (mounted) setState(() => _error = 'Errore nel salvataggio: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -298,7 +300,7 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
   @override
   Widget build(BuildContext context) {
     final existing = _existing;
-    final days = _end.difference(_start).inDays + 1;
+    final days = daysBetween(_start, _end) + 1;
     final price = parseAmountInput(_price.text);
     final deposit = parseAmountInput(_deposit.text) ?? 0;
     final due = (!_paid && price != null && price - deposit > 0) ? price - deposit : 0.0;
@@ -420,11 +422,11 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
                       onPressed: () {
-                        final extraStart = dayOnly(existing.endDate).add(const Duration(days: 1));
+                        final extraStart = addDays(existing.endDate, 1);
                         Navigator.of(context).pop(BookingFormResult(
                           BookingFormAction.extendElsewhere,
                           existing,
-                          range: DateTimeRange(start: DateTime(extraStart.year, extraStart.month, extraStart.day), end: _end),
+                          range: DateTimeRange(start: extraStart, end: _end),
                         ));
                       },
                       icon: const Icon(Icons.add_to_photos, color: Colors.white, size: 18),
