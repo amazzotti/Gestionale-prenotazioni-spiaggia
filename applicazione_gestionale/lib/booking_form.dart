@@ -5,6 +5,7 @@ import 'availability.dart';
 import 'booking_service.dart';
 import 'contact.dart';
 import 'models.dart';
+import 'sector_style.dart';
 import 'umbrella_timeline_view.dart';
 
 enum BookingFormAction {
@@ -317,8 +318,8 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
             children: [
               Text('Ombrellone ${widget.umbrella.simpleId}',
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-              Text('Settore: ${widget.umbrella.sectorName}',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14), textAlign: TextAlign.center),
+              const SizedBox(height: 4),
+              Center(child: SectorBadge(widget.umbrella.sectorName, text: 'Settore: ${widget.umbrella.sectorName}')),
               const SizedBox(height: 20),
               _nameField(),
               const SizedBox(height: 12),

@@ -9,6 +9,7 @@ import 'models.dart';
 import 'help_screen.dart';
 import 'planner_screen.dart';
 import 'sector_guard.dart';
+import 'sector_style.dart';
 import 'suggestions_sheet.dart';
 import 'umbrella_timeline_view.dart';
 
@@ -31,7 +32,17 @@ class MapScreen extends StatefulWidget {
   /// Apre subito "Dove la metto?" (usato da "Nuova prenotazione").
   final bool openSuggestions;
 
-  const MapScreen({super.key, this.highlightUmbrellaId, this.filterDateRange, required this.beachSectors, this.openSuggestions = false});
+  /// Settore da mostrare all'apertura (null = tutti). Le prenotazioni si fanno settore per settore.
+  final String? initialSector;
+
+  const MapScreen({
+    super.key,
+    this.highlightUmbrellaId,
+    this.filterDateRange,
+    required this.beachSectors,
+    this.openSuggestions = false,
+    this.initialSector,
+  });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -65,6 +76,7 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     final today = _repo.today;
     _range = widget.filterDateRange ?? DateTimeRange(start: today, end: today);
+    _selectedSectorName = widget.initialSector;
   }
 
   /// Periodo mostrato: in modalità sposta/allunga è quello della prenotazione da piazzare.
@@ -252,20 +264,10 @@ class _MapScreenState extends State<MapScreen> {
                   tooltip: 'Planner',
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => PlannerScreen(beachSectors: widget.beachSectors, highlightRange: _range)),
+                    MaterialPageRoute(builder: (context) => PlannerScreen(beachSectors: widget.beachSectors, highlightRange: _range, initialSector: _selectedSectorName)),
                   ),
                 ),
-                DropdownButton<String?>(
-                  value: _selectedSectorName,
-                  hint: const Text('Settore', style: TextStyle(color: Colors.black87)),
-                  underline: const SizedBox.shrink(),
-                  onChanged: (v) => setState(() => _selectedSectorName = v),
-                  items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('Tutti')),
-                    ...widget.beachSectors.map((s) => DropdownMenuItem<String?>(value: s.name, child: Text(s.name))),
-                  ],
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
               ],
       ),
       body: Column(
@@ -273,6 +275,17 @@ class _MapScreenState extends State<MapScreen> {
           if (_isMoveMode) _modeBanner(Colors.orange.shade200, Icons.move_down, 'SPOSTA: ${_bookingToMove!.clientName}', 'Tocca un ombrellone verde'),
           if (_isExtraMode) _modeBanner(Colors.blue.shade200, Icons.add_chart, 'ALLUNGA: ${_extendOriginal!.clientName}', 'Tocca un ombrellone verde per i giorni extra'),
           if (!_isMoveMode && !_isExtraMode) _periodBar(),
+          if (!_isMoveMode && !_isExtraMode)
+            ValueListenableBuilder<List<Booking>?>(
+              valueListenable: _repo.bookings,
+              builder: (context, bookings, _) => SectorBar(
+                sectors: widget.beachSectors,
+                selected: _selectedSectorName,
+                range: _range,
+                bookings: bookings ?? const [],
+                onSelected: (v) => setState(() => _selectedSectorName = v),
+              ),
+            ),
           _legend(),
           Expanded(
             child: ValueListenableBuilder<List<Booking>?>(

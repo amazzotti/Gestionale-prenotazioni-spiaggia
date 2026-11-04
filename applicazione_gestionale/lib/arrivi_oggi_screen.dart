@@ -192,24 +192,12 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
         ),
       );
     }
-    // Divisi per settore: prima Mare, poi Tende, poi Dietro.
-    return ListView(
+    return ListView.builder(
       padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        for (final (sector, items) in groupBySector(list, const [])) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
-            child: Text('${sector.toUpperCase()} · ${items.length}',
-                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, color: Colors.green.shade900)),
-          ),
-          for (final b in items) _card(b, showArrived: showArrived),
-        ],
-      ],
-    );
-  }
-
-  Widget _card(Booking b, {required bool showArrived}) {
-    return Card(
+      itemCount: list.length,
+      itemBuilder: (context, index) {
+        final b = list[index];
+        return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -261,5 +249,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
             ),
           ),
         );
+      },
+    );
   }
 }

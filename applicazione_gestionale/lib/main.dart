@@ -15,6 +15,7 @@ import 'help_screen.dart';
 import 'layout_repository.dart';
 import 'map_screen.dart';
 import 'planner_screen.dart';
+import 'sector_style.dart';
 import 'stats_screen.dart';
 
 Future<void> main() async {
@@ -127,6 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
             highlightUmbrellaId: selected.umbrellaId,
             filterDateRange: selected.range,
             beachSectors: _beachSectors,
+            initialSector: selected.sectorName,
           ),
         ),
       );
@@ -142,9 +144,22 @@ class _HomeScreenState extends State<HomeScreen> {
       helpText: 'Seleziona il periodo di prenotazione',
       locale: const Locale('it', 'IT'),
     );
-    if (selectedRange != null && context.mounted) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors, openSuggestions: true)));
-    }
+    if (selectedRange == null || !context.mounted) return;
+    // Le prenotazioni si fanno settore per settore: prima si sceglie dove (Mare, Tende o Dietro).
+    final range = DateTimeRange(start: dayOnly(selectedRange.start), end: dayOnly(selectedRange.end));
+    final sector = await chooseSector(
+      context,
+      sectors: _beachSectors,
+      range: range,
+      bookings: BookingRepository.instance.bookings.value ?? const [],
+    );
+    if (sector == null || !context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapScreen(filterDateRange: range, beachSectors: _beachSectors, initialSector: sector, openSuggestions: true),
+      ),
+    );
   }
 
   void _openTodayMap(BuildContext context) {
@@ -220,36 +235,28 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, bookings, _) {
         if (bookings == null || _beachSectors.isEmpty) return const SizedBox(height: 8);
         final today = BookingRepository.instance.today;
-        // Tutto separato per settore: occupati, arrivi e partenze di Mare, Tende e Dietro.
         final occupancy = occupancyOn(today, _beachSectors, bookings);
-        final arrivals = arrivalsOn(today, bookings);
-        final departures = departuresOn(today, bookings);
-        final headerStyle = TextStyle(fontSize: 12, color: Colors.grey.shade700);
-        final valueStyle = TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade900);
-        Widget cell(Widget child, {int flex = 1}) => Expanded(flex: flex, child: Center(child: child));
+        final total = occupancy.fold<int>(0, (s, o) => s + o.total);
+        final occupied = occupancy.fold<int>(0, (s, o) => s + o.occupied);
+        Widget tile(String value, String label, IconData icon) => Expanded(
+              child: Column(children: [
+                Icon(icon, color: Colors.green.shade800),
+                Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green.shade900)),
+                Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+              ]),
+            );
         return Card(
           color: Colors.white.withValues(alpha: 0.9),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             child: Column(children: [
               Text('Oggi, ${DateFormat('EEEE d MMMM', 'it').format(today)}', style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Row(children: [
-                const Expanded(flex: 2, child: SizedBox()),
-                cell(Text('occupati', style: headerStyle)),
-                cell(Text('arrivi', style: headerStyle)),
-                cell(Text('partenze', style: headerStyle)),
+                tile('$occupied/$total', 'ombrelloni occupati', Icons.beach_access),
+                tile('${arrivalsOn(today, bookings).length}', 'arrivi', Icons.login),
+                tile('${departuresOn(today, bookings).length}', 'partenze', Icons.logout),
               ]),
-              for (final o in occupancy)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(children: [
-                    Expanded(flex: 2, child: Text(o.sector, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                    cell(Text('${o.occupied}/${o.total}', style: valueStyle)),
-                    cell(Text('${arrivals.where((b) => b.sectorName == o.sector).length}', style: valueStyle)),
-                    cell(Text('${departures.where((b) => b.sectorName == o.sector).length}', style: valueStyle)),
-                  ]),
-                ),
             ]),
           ),
         );
@@ -339,27 +346,31 @@ class BookingSearchDelegate extends SearchDelegate<Booking?> {
   @override
   Widget? buildLeading(BuildContext context) => IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, null));
   @override
-  Widget buildResults(BuildContext context) => _buildResultsList();
+  Widget buildResults(BuildContext context) => _buildResultsList(context);
   @override
-  Widget buildSuggestions(BuildContext context) => _buildResultsList();
+  Widget buildSuggestions(BuildContext context) => _buildResultsList(context);
 
-  Widget _buildResultsList() {
+  Widget _buildResultsList(BuildContext context) {
     if (query.trim().isEmpty) return const Center(child: Text('Digita un nome, un telefono o il numero dell\'ombrellone.'));
     final results = searchBookings(query, allBookings);
     if (results.isEmpty) return const Center(child: Text('Nessuna prenotazione trovata.'));
     final fmt = DateFormat('dd/MM');
-    return ListView.builder(
-      itemCount: results.length,
-      itemBuilder: (context, index) {
-        final booking = results[index];
-        return ListTile(
-          title: Text('${booking.clientName} - Ombrellone: ${booking.umbrellaLabel}'),
-          subtitle: Text('Periodo: ${fmt.format(booking.startDate)} - ${fmt.format(booking.endDate)}\nSettore: ${booking.sectorName}'
-              '${booking.amountDue > 0 ? ' · da incassare ${formatEuro(booking.amountDue)}' : ''}'),
-          isThreeLine: true,
-          onTap: () => close(context, booking),
-        );
-      },
-    );
+    // Risultati divisi per settore: Mare, Tende, Dietro.
+    return ListView(children: [
+      for (final (sector, items) in groupBySector(results, const [])) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Align(alignment: Alignment.centerLeft, child: SectorBadge(sector, text: '$sector · ${items.length}')),
+        ),
+        for (final booking in items)
+          ListTile(
+            leading: Icon(SectorStyle.of(sector).icon, color: SectorStyle.of(sector).color),
+            title: Text('${booking.clientName} - Ombrellone: ${booking.umbrellaLabel}'),
+            subtitle: Text('Periodo: ${fmt.format(booking.startDate)} - ${fmt.format(booking.endDate)}'
+                '${booking.amountDue > 0 ? ' · da incassare ${formatEuro(booking.amountDue)}' : ''}'),
+            onTap: () => close(context, booking),
+          ),
+      ],
+    ]);
   }
 }

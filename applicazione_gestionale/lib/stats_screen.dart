@@ -53,8 +53,7 @@ class _StatsScreenState extends State<StatsScreen> {
           final totalUmbrellas = occupancy.fold<int>(0, (s, o) => s + o.total);
           final totalOccupied = occupancy.fold<int>(0, (s, o) => s + o.occupied);
           final money = moneySummary(bookings);
-          final moneyPerSector = moneyBySector(widget.beachSectors, bookings);
-          final duePerSector = groupBySector(bookingsWithAmountDue(bookings), widget.beachSectors);
+          final due = bookingsWithAmountDue(bookings);
 
           return ListView(
             padding: const EdgeInsets.all(12),
@@ -104,58 +103,22 @@ class _StatsScreenState extends State<StatsScreen> {
                 Expanded(child: _moneyCard('Incassato', formatEuro(money.collected), Colors.green.shade700, Icons.savings)),
                 Expanded(child: _moneyCard('Da incassare', formatEuro(money.due), Colors.orange.shade800, Icons.euro)),
               ]),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(children: [
-                    Row(children: [
-                      const Expanded(flex: 2, child: Text('Per settore', style: TextStyle(fontWeight: FontWeight.bold))),
-                      Expanded(flex: 2, child: Text('Incassato', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: Colors.grey.shade700))),
-                      Expanded(flex: 2, child: Text('Da incassare', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: Colors.grey.shade700))),
-                    ]),
-                    for (final s in moneyPerSector)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Row(children: [
-                          Expanded(flex: 2, child: Text(s.sector, style: const TextStyle(fontSize: 15))),
-                          Expanded(
-                            flex: 2,
-                            child: Text(formatEuro(s.money.collected),
-                                textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700)),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(formatEuro(s.money.due),
-                                textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
-                          ),
-                        ]),
-                      ),
-                  ]),
-                ),
-              ),
               const Padding(
                 padding: EdgeInsets.fromLTRB(4, 16, 4, 4),
                 child: Text('Da incassare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
-              if (duePerSector.isEmpty)
+              if (due.isEmpty)
                 const Padding(padding: EdgeInsets.all(8), child: Text('Nessun pagamento in sospeso. 🎉'))
               else
-                for (final (sector, due) in duePerSector) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
-                    child: Text(sector.toUpperCase(),
-                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, color: Colors.green.shade900)),
-                  ),
-                  for (final b in due)
-                    Card(
-                      child: ListTile(
-                        title: Text('${b.clientName} - Ombr. ${b.umbrellaLabel}'),
-                        subtitle: Text('Dal ${_shortFmt.format(b.startDate)} al ${_shortFmt.format(b.endDate)}'
-                            '${b.deposit > 0 ? ' · acconto ${formatEuro(b.deposit)}' : ''}'),
-                        trailing: TextButton(onPressed: () => _markPaid(b), child: Text(formatEuro(b.amountDue))),
-                      ),
+                for (final b in due)
+                  Card(
+                    child: ListTile(
+                      title: Text('${b.clientName} - Ombr. ${b.umbrellaLabel}'),
+                      subtitle: Text('Dal ${_shortFmt.format(b.startDate)} al ${_shortFmt.format(b.endDate)}'
+                          '${b.deposit > 0 ? ' · acconto ${formatEuro(b.deposit)}' : ''}'),
+                      trailing: TextButton(onPressed: () => _markPaid(b), child: Text(formatEuro(b.amountDue))),
                     ),
-                ],
+                  ),
               const Padding(
                 padding: EdgeInsets.all(8),
                 child: Text('Gli importi considerano solo le prenotazioni con un prezzo inserito, nella stagione in corso.',

@@ -31,8 +31,9 @@ Prima le prenotazioni stavano su carta e su un programma per PC. Serviva qualcos
   Pressione lunga su un ombrellone: chi c'era **prima**, chi c'è **nel periodo**, chi arriva **dopo**.
 - **Planner a calendario**: una riga per ombrellone e una colonna per giorno, per 4 settimane, con le prenotazioni come barre. Per
   spostarne una si tocca la barra e poi la riga di destinazione; le righe libere diventano verdi.
-- **Settori sempre separati**: Mare, Tende e Dietro hanno ognuno i propri riepiloghi, suggerimenti, arrivi e incassi;
-  spostare una prenotazione in un altro settore richiede una conferma.
+- **Prenotazioni divise per settore**: *Nuova prenotazione* chiede le date, poi il settore (Mare, Tende o Dietro)
+  mostrando quanti posti liberi ha, poi propone l'ombrellone. Mappa e planner hanno una barra dei settori con i posti
+  liberi del periodo; ogni settore ha il suo colore e la sua icona. Spostare in un altro settore chiede conferma.
 - **Suggeritore "Dove la metto?"**: consiglia l'ombrellone migliore per le date scelte, con una classifica per ogni
   settore. Prima quello abituale del cliente, poi l'incastro migliore tra due prenotazioni, così gli ombrelloni liberi
   restano per chi si ferma di più.
@@ -89,6 +90,10 @@ progetto ma non dà accesso ai dati: l'accesso è deciso dalle regole di sicurez
 |---|---|---|
 | ![Telefoni](screenshots/10_telefoni.png) | ![Planner sposta](screenshots/12_planner_sposta.png) | ![Guida](screenshots/14_guida.png) |
 
+| Nuova prenotazione: scelta del settore |
+|---|
+| ![Scelta del settore](screenshots/15_scelta_settore.png) |
+
 Le anteprime usano dati di esempio e si rigenerano con `flutter test screenshots_test --update-goldens`
 (dalla cartella `applicazione_gestionale`).
 
@@ -122,11 +127,12 @@ salvato, fai doppio clic su **`rilascia.bat`**:
 | `rilascia.bat` | V1.0.0 → V1.0.1 (correzioni) |
 | `rilascia.bat minor` | V1.0.0 → V1.1.0 (nuove funzioni) |
 | `rilascia.bat major` | V1.0.0 → V2.0.0 (cambiamenti grossi) |
+| `rilascia.bat 1.0.0` | versione precisa |
 | `rilascia.bat prova` | mostra solo la prossima versione |
 
-Lo script aumenta la versione, esegue i test, crea l'APK in `rilasci/`, prepara le note con le modifiche dall'ultima
-versione, fa commit + tag `vX.Y.Z` + push e apre la pagina GitHub della **Release**: si incollano le note, si allega
-l'APK e si preme *Publish release*.
+Lo script fa tutto da solo: esegue i test, scrive la versione, crea l'APK in `rilasci/`, prepara le note
+(da `note-rilascio/VX.Y.Z.md` se esiste, altrimenti dai commit), fa commit + tag `vX.Y.Z` + push e pubblica la
+**Release** su GitHub con l'APK allegato, pronto da scaricare e installare sui telefoni.
 
 ## Sviluppo e test
 
