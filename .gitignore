@@ -1,0 +1,11 @@
+# Vecchia versione desktop (Python) e file generati
+dist/
+build/
+*.exe
+*.db
+__pycache__/
+
+# Test regole Firestore
+firestore-tests/node_modules/
+firebase-debug.log
+firestore-debug.log
