@@ -55,7 +55,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    final today = dayOnly(DateTime.now());
+    final today = _repo.today;
     _range = widget.filterDateRange ?? DateTimeRange(start: today, end: today);
   }
 
@@ -80,7 +80,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _goToday() {
-    final today = dayOnly(DateTime.now());
+    final today = _repo.today;
     setState(() => _range = DateTimeRange(start: today, end: today));
   }
 
@@ -336,8 +336,16 @@ class _MapScreenState extends State<MapScreen> {
         item(MapColors.free, 'Libero'),
         item(MapColors.partial, 'In parte'),
         item(MapColors.full, 'Occupato'),
-        item(Colors.black54, 'Da incassare', icon: Icons.euro),
-        item(Colors.black54, 'Arrivato', icon: Icons.check),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _badge(Icons.euro, Colors.orange.shade900),
+          const SizedBox(width: 4),
+          const Text('Da incassare', style: TextStyle(fontSize: 12)),
+        ]),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _badge(Icons.check, Colors.green.shade800),
+          const SizedBox(width: 4),
+          const Text('Arrivato', style: TextStyle(fontSize: 12)),
+        ]),
       ]),
     );
   }
@@ -398,12 +406,15 @@ class _MapScreenState extends State<MapScreen> {
     final arrived = _isSingleDay && inRange.isNotEmpty && inRange.every((b) => b.arrived);
 
     // Anteprima sul quadrato: periodo della prenotazione (o quante sono).
-    String? preview;
+    // Su due righe ("07/07" sopra "19/07") perché sul telefono i quadrati sono piccoli.
+    final List<String> preview;
     if (inRange.length == 1) {
       final b = inRange.first;
-      preview = '${_shortFmt.format(b.startDate)}-${_shortFmt.format(b.endDate)}';
+      preview = [_shortFmt.format(b.startDate), _shortFmt.format(b.endDate)];
     } else if (inRange.length > 1) {
-      preview = '${inRange.length} pren.';
+      preview = ['${inRange.length}', 'pren.'];
+    } else {
+      preview = const [];
     }
 
     return Semantics(
@@ -428,28 +439,42 @@ class _MapScreenState extends State<MapScreen> {
         onLongPress: inMode ? null : () => _showUmbrellaBookings(umbrella, allBookings),
         child: Opacity(
           opacity: (inMode && isBooked) ? 0.3 : 1.0,
-          child: Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-            child: Stack(children: [
-              Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(umbrella.simpleId, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                    if (preview != null)
-                      Text(preview, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
-                  ]),
+          child: Stack(clipBehavior: Clip.none, children: [
+            Positioned.fill(
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(umbrella.simpleId, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18, height: 1.1)),
+                      for (final line in preview)
+                        Text(line, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600, height: 1.05)),
+                    ]),
+                  ),
                 ),
               ),
-              if (hasDue) const Positioned(top: 0, right: 0, child: Icon(Icons.euro, size: 11, color: Colors.white)),
-              if (arrived) const Positioned(top: 0, left: 0, child: Icon(Icons.check, size: 11, color: Colors.white)),
-            ]),
-          ),
+            ),
+            // Bollini sull'angolo, fuori dal testo: € = da incassare, ✓ = arrivato.
+            if (hasDue) Positioned(top: -5, right: -5, child: _badge(Icons.euro, Colors.orange.shade900)),
+            if (arrived) Positioned(top: -5, left: -5, child: _badge(Icons.check, Colors.green.shade800)),
+          ]),
         ),
       ),
     );
   }
+
+  Widget _badge(IconData icon, Color color) => Container(
+        width: 14,
+        height: 14,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: color, width: 1),
+        ),
+        child: Icon(icon, size: 10, color: color),
+      );
 
   /// Scheda con tutte le prenotazioni della stagione per un ombrellone.
   /// Si apre con pressione lunga, o con un tocco se l'ombrellone è arancione.

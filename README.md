@@ -7,6 +7,23 @@ Lo usa il personale dello stabilimento da telefono Android.
 
 App Flutter (`applicazione_gestionale/`) con Firebase Authentication e Cloud Firestore.
 
+## Anteprime
+
+| Home | Mappa di oggi | Mappa di un periodo |
+|---|---|---|
+| ![Home](screenshots/01_home.png) | ![Mappa di oggi](screenshots/02_mappa_oggi.png) | ![Mappa periodo](screenshots/03_mappa_periodo.png) |
+
+| Scheda prenotazione | Prenotazioni di un ombrellone | Annulla eliminazione |
+|---|---|---|
+| ![Scheda](screenshots/04_scheda_prenotazione.png) | ![Elenco](screenshots/05_elenco_ombrellone.png) | ![Annulla](screenshots/06_annulla_eliminazione.png) |
+
+| Arrivi e partenze | Incassi e statistiche | Login |
+|---|---|---|
+| ![Arrivi](screenshots/07_arrivi.png) | ![Statistiche](screenshots/08_statistiche.png) | ![Login](screenshots/09_login.png) |
+
+Le anteprime (dati di esempio, formato telefono) si rigenerano con:
+`cd applicazione_gestionale` e poi `flutter test screenshots_test --update-goldens`.
+
 ## Funzioni
 
 - **Mappa della spiaggia** per settori (Mare, Tende, Dietro), con passerelle e zoom.
@@ -47,7 +64,7 @@ versione, perché la versione vecchia (senza login) smette di funzionare appena 
 4. **Firestore Database → Dati**: crea la collezione `utenti`. Per ogni persona aggiungi un documento con:
    - **ID documento** = email dell'account, tutta in minuscolo (es. `mario.rossi@gmail.com`)
    - campo `ruolo` (stringa) = `admin` oppure `staff`
-5. Installa la nuova versione dell'app (2.0.0) su tutti i telefoni.
+5. Installa la nuova versione dell'app su tutti i telefoni.
 6. Fai il primo accesso con un account **admin**: l'app converte automaticamente le prenotazioni salvate
    in formati vecchi (una volta sola).
 7. **Firestore Database → Regole**: incolla il contenuto di [`firestore.rules`](firestore.rules) e premi *Pubblica*.
@@ -58,6 +75,20 @@ versione, perché la versione vecchia (senza login) smette di funzionare appena 
 |---|---|---|---|
 | `staff` | ✅ | — | — |
 | `admin` | ✅ | ✅ | ✅ |
+
+## Versioni e rilasci
+
+La versione compare in fondo alla schermata principale (es. **V1.0.0**). Per un rilascio ufficiale,
+dal branch `main` e con tutto salvato, fai doppio clic su **`rilascia.bat`** (oppure lancialo dal terminale):
+
+| Comando | Effetto |
+|---|---|
+| `rilascia.bat` | V1.0.0 → V1.0.1 (correzioni) |
+| `rilascia.bat minor` | V1.0.0 → V1.1.0 (nuove funzioni) |
+| `rilascia.bat major` | V1.0.0 → V2.0.0 (cambiamenti grossi) |
+| `rilascia.bat prova` | mostra solo la prossima versione |
+
+Lo script aumenta la versione, esegue i test, crea l'APK in `rilasci/`, fa commit, tag `vX.Y.Z` e push.
 
 ## Struttura del codice
 

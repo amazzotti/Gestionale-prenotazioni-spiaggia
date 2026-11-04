@@ -26,7 +26,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _selectedDate = dayOnly(widget.initialDate ?? DateTime.now());
+    _selectedDate = dayOnly(widget.initialDate ?? BookingRepository.instance.today);
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -124,7 +124,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final isToday = _selectedDate == dayOnly(DateTime.now());
+    final isToday = _selectedDate == BookingRepository.instance.today;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Arrivi e Partenze'),
@@ -158,7 +158,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
               ),
               IconButton(icon: const Icon(Icons.chevron_right), tooltip: 'Giorno dopo', onPressed: () => _shiftDay(1)),
               if (!isToday)
-                TextButton(onPressed: () => setState(() => _selectedDate = dayOnly(DateTime.now())), child: const Text('OGGI')),
+                TextButton(onPressed: () => setState(() => _selectedDate = BookingRepository.instance.today), child: const Text('OGGI')),
             ]),
           ),
           Expanded(
@@ -204,7 +204,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
                   ? Checkbox(value: b.arrived, activeColor: Colors.green, onChanged: (_) => _toggleArrived(b))
                   : const Icon(Icons.logout, color: Colors.blueGrey),
               title: Text(
-                '${b.clientName} - Ombr. ${b.umbrellaLabel}',
+                b.clientName,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   decoration: showArrived && b.arrived ? TextDecoration.lineThrough : null,
@@ -214,9 +214,9 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(showArrived
-                      ? 'Fino al ${_shortFmt.format(b.endDate)} - Settore: ${b.sectorName}'
-                      : 'Dal ${_shortFmt.format(b.startDate)} - Settore: ${b.sectorName}'),
+                  Text('Ombrellone ${b.umbrellaLabel} · ${b.sectorName}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(showArrived ? 'Fino al ${_shortFmt.format(b.endDate)}' : 'Dal ${_shortFmt.format(b.startDate)}'),
                   if (b.amountDue > 0)
                     InkWell(
                       onTap: () => _markPaid(b),

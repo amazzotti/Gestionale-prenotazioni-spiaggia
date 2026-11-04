@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
+import 'app_version.dart';
 import 'arrivi_oggi_screen.dart';
 import 'auth_gate.dart';
 import 'availability.dart';
@@ -226,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
       valueListenable: BookingRepository.instance.bookings,
       builder: (context, bookings, _) {
         if (bookings == null || _beachSectors.isEmpty) return const SizedBox(height: 8);
-        final today = DateTime.now();
+        final today = BookingRepository.instance.today;
         final occupancy = occupancyOn(today, _beachSectors, bookings);
         final total = occupancy.fold<int>(0, (s, o) => s + o.total);
         final occupied = occupancy.fold<int>(0, (s, o) => s + o.occupied);
@@ -303,6 +304,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: const Text('Reset Stagione', style: TextStyle(color: Colors.white)),
                         ),
                       ],
+                      const SizedBox(height: 24),
+                      const AppVersionText(),
                     ],
                   ),
                 ),

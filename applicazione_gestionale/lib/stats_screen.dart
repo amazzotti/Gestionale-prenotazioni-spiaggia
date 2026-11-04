@@ -18,7 +18,7 @@ class StatsScreen extends StatefulWidget {
 class _StatsScreenState extends State<StatsScreen> {
   static final _dayFmt = DateFormat('EEE dd/MM/yyyy', 'it');
   static final _shortFmt = DateFormat('dd/MM');
-  DateTime _day = dayOnly(DateTime.now());
+  DateTime _day = BookingRepository.instance.today;
 
   Future<void> _markPaid(Booking b) async {
     final ok = await showDialog<bool>(

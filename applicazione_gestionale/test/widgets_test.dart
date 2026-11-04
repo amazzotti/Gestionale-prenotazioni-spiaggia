@@ -80,8 +80,10 @@ void main() {
       expect(find.text('Libero'), findsOneWidget);
       expect(find.text('In parte'), findsOneWidget);
       expect(find.text('Occupato'), findsOneWidget);
-      expect(find.text('01/07-10/07'), findsOneWidget);
-      expect(find.text('03/07-04/07'), findsOneWidget);
+      // anteprima del periodo su due righe
+      for (final t in ['01/07', '10/07', '03/07', '04/07']) {
+        expect(find.text(t), findsOneWidget);
+      }
       // L'etichetta di accessibilità inizia con numero e stato (poi segue il testo del quadrato).
       expect(find.bySemanticsLabel(RegExp(r'^Ombrellone 1, occupato(\n|$)')), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp(r'^Ombrellone 2, occupato in parte(\n|$)')), findsOneWidget);
@@ -188,18 +190,19 @@ void main() {
     await tester.pumpWidget(app(ArriviOggiScreen(initialDate: DateTime(2027, 7, 14))));
     await tester.pump();
 
-    expect(find.text('Arriva - Ombr. 1'), findsOneWidget);
+    expect(find.text('Arriva'), findsOneWidget);
+    expect(find.text('Ombrellone 1 · Mare'), findsOneWidget);
     expect(find.text('Da incassare € 80'), findsOneWidget);
-    expect(find.text('Parte - Ombr. 2'), findsNothing);
+    expect(find.text('Parte'), findsNothing);
 
     await tester.tap(find.text('PARTENZE'));
     await tester.pumpAndSettle();
-    expect(find.text('Parte - Ombr. 2'), findsOneWidget);
+    expect(find.text('Parte'), findsOneWidget);
   });
 
   testWidgets('Statistiche: occupazione e incassi', (tester) async {
     await useBigScreen(tester);
-    final today = DateTime.now();
+    final today = DateTime(2027, 7, 1); // "oggi" secondo l'orologio del repository di test
     repo.bookings.value = [
       booking('a', 'Mare-1', today, today, name: 'Uno', price: 100, deposit: 40),
       Booking(id: 'b', umbrellaId: 'Mare-2', clientName: 'Due', startDate: today, endDate: today, price: 60, paid: true),

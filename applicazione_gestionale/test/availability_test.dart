@@ -181,9 +181,9 @@ void main() {
     });
   });
 
-  test('lowestFreeNumber riusa i numeri liberi', () {
-    expect(lowestFreeNumber({}), 1);
-    expect(lowestFreeNumber({1, 2, 3}), 4);
-    expect(lowestFreeNumber({1, 2, 4, 5}), 3);
+  test('nextUmbrellaNumber: il più alto + 1, come nella versione originale', () {
+    expect(nextUmbrellaNumber({}), 1);
+    expect(nextUmbrellaNumber({1, 2, 3}), 4);
+    expect(nextUmbrellaNumber({1, 2, 4, 5}), 6);
   });
 }

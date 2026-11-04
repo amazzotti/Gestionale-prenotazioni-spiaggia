@@ -9,3 +9,6 @@ __pycache__/
 firestore-tests/node_modules/
 firebase-debug.log
 firestore-debug.log
+
+# APK dei rilasci (creati da rilascia.bat)
+rilasci/

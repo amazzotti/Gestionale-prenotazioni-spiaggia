@@ -163,14 +163,14 @@ class _BeachEditorScreenState extends State<BeachEditorScreen> {
           .where((u) => u.isActive && u.id != null && u.id!.split('-').length == 3 && u.id!.split('-')[1] == prefix)
           .map((u) => int.tryParse(u.id!.split('-').last) ?? 0)
           .toSet();
-      newId = 'Tende-$prefix-${lowestFreeNumber(used)}';
+      newId = 'Tende-$prefix-${nextUmbrellaNumber(used)}';
     } else {
       final sectorPrefix = _selectedSector!;
       final used = _gridState
           .where((u) => u.isActive && u.id != null && u.id!.startsWith('$sectorPrefix-'))
           .map((u) => int.tryParse(u.simpleId) ?? 0)
           .toSet();
-      newId = '$sectorPrefix-${lowestFreeNumber(used)}';
+      newId = '$sectorPrefix-${nextUmbrellaNumber(used)}';
     }
 
     setState(() {

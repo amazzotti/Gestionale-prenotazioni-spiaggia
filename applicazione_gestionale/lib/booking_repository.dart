@@ -45,6 +45,9 @@ class BookingRepository {
   /// le stagioni passate non vengono più lette.
   DateTime get windowStart => DateTime(_now().year, 1, 1);
 
+  /// Data di oggi (a mezzanotte). Unica fonte di "oggi" per tutte le schermate.
+  DateTime get today => dayOnly(_now());
+
   bool get isStarted => _sub != null;
 
   Future<void> start({required bool isAdmin}) async {

@@ -2,7 +2,7 @@ name: applicazione_gestionale
 description: "Gestionale prenotazioni ombrelloni - Bagni Carla 98"
 publish_to: 'none'
 
-version: 2.0.0+2
+version: 1.0.0+1
 
 environment:
   sdk: ^3.9.2
@@ -18,6 +18,7 @@ dependencies:
   cloud_firestore: ^5.0.2
   firebase_auth: ^5.7.0
   url_launcher: ^6.3.2
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

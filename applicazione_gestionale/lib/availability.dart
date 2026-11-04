@@ -193,11 +193,5 @@ String bookingSummaryMessage(Booking b, {String beachName = 'Bagni Carla 98'}) {
   return buffer.toString();
 }
 
-/// Numero più basso (da 1) non ancora usato: serve all'editor per numerare gli ombrelloni.
-int lowestFreeNumber(Set<int> used) {
-  var n = 1;
-  while (used.contains(n)) {
-    n++;
-  }
-  return n;
-}
+/// Numero del prossimo ombrellone nell'editor: il più alto già usato + 1 (come nella versione originale).
+int nextUmbrellaNumber(Iterable<int> used) => used.fold(0, (max, n) => n > max ? n : max) + 1;

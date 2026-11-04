@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'app_version.dart';
 import 'booking_repository.dart';
 
 /// Decide cosa mostrare: login, "non autorizzato" oppure l'app.
@@ -263,6 +264,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         : const Text('ACCEDI', style: TextStyle(fontSize: 16)),
                   ),
                   TextButton(onPressed: _busy ? null : _resetPassword, child: const Text('Password dimenticata?')),
+                  const SizedBox(height: 16),
+                  const AppVersionText(),
                 ],
               ),
             ),
