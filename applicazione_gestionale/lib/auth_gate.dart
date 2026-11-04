@@ -1,109 +1,224 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_version.dart';
 import 'booking_repository.dart';
+import 'device_service.dart';
 
-/// Decide cosa mostrare: login, "non autorizzato" oppure l'app.
+/// Decide cosa mostrare, senza schermata di login:
+/// - telefono approvato -> l'app;
+/// - telefono nuovo -> schermata "in attesa di approvazione".
 ///
-/// Gli utenti autorizzati sono i documenti della collezione `utenti`,
-/// con ID = email in minuscolo e campo `ruolo` ('admin' oppure 'staff').
-/// Solo gli admin possono modificare la mappa e resettare la stagione.
-class AuthGate extends StatelessWidget {
+/// I telefoni approvati sono nella collezione `dispositivi` (campo `ruolo`:
+/// 'admin' oppure 'staff'). Solo gli admin vedono editor mappa, reset stagione
+/// e la gestione dei telefoni.
+class AuthGate extends StatefulWidget {
   final Widget Function(BuildContext context, {required bool isAdmin}) builder;
   const AuthGate({super.key, required this.builder});
 
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        final user = snapshot.data;
-        if (user == null) return const LoginScreen();
-        return _RoleLoader(key: ValueKey(user.uid), user: user, builder: builder);
-      },
-    );
-  }
+  State<AuthGate> createState() => _AuthGateState();
 }
 
-class _RoleLoader extends StatefulWidget {
-  final User user;
-  final Widget Function(BuildContext context, {required bool isAdmin}) builder;
-  const _RoleLoader({super.key, required this.user, required this.builder});
+class _AuthGateState extends State<AuthGate> {
+  DeviceService get _devices => DeviceService.instance;
 
-  @override
-  State<_RoleLoader> createState() => _RoleLoaderState();
-}
-
-class _RoleLoaderState extends State<_RoleLoader> {
-  bool _loading = true;
-  bool _authorized = false;
-  bool _isAdmin = false;
+  String? _uid;
   String? _error;
+  StreamSubscription<ApprovedDevice?>? _sub;
+  ApprovedDevice? _device;
+  bool _checked = false;
+  bool? _startedAsAdmin;
 
   @override
   void initState() {
     super.initState();
-    _loadRole();
+    _connect();
   }
 
-  Future<void> _loadRole() async {
+  Future<void> _connect() async {
     setState(() {
-      _loading = true;
       _error = null;
+      _checked = false;
     });
     try {
-      final email = (widget.user.email ?? '').toLowerCase();
-      final doc = await FirebaseFirestore.instance.collection('utenti').doc(email).get();
-      if (doc.exists) {
-        _authorized = true;
-        _isAdmin = doc.data()?['ruolo'] == 'admin';
-        await BookingRepository.instance.start(isAdmin: _isAdmin);
-      } else {
-        _authorized = false;
-      }
-    } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
-        _authorized = false;
-      } else {
-        _error = 'Errore di connessione: ${e.message ?? e.code}';
-      }
+      final uid = await _devices.ensureSignedIn();
+      await _sub?.cancel();
+      _sub = _devices.watchMyDevice(uid).listen(
+        _onDevice,
+        onError: (Object e) {
+          // Le regole negano la lettura solo se qualcosa non va: si tratta come "non approvato".
+          debugPrint('Stato telefono non leggibile: $e');
+          _onDevice(null);
+        },
+      );
+      if (mounted) setState(() => _uid = uid);
     } catch (e) {
-      _error = 'Errore: $e';
+      if (mounted) setState(() => _error = 'Nessuna connessione a internet.\n($e)');
     }
-    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _onDevice(ApprovedDevice? device) async {
+    final repo = BookingRepository.instance;
+    if (device == null) {
+      await repo.stop();
+      _startedAsAdmin = null;
+    } else if (_startedAsAdmin != device.isAdmin || !repo.isStarted) {
+      _startedAsAdmin = device.isAdmin;
+      await repo.start(isAdmin: device.isAdmin);
+    }
+    if (mounted) {
+      setState(() {
+        _device = device;
+        _checked = true;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _sub?.cancel();
     BookingRepository.instance.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     if (_error != null) {
-      return _MessageScreen(
-        icon: Icons.wifi_off,
-        message: _error!,
-        actionLabel: 'RIPROVA',
-        onAction: _loadRole,
-      );
+      return _MessageScreen(icon: Icons.wifi_off, message: _error!, actionLabel: 'RIPROVA', onAction: _connect);
     }
-    if (!_authorized) {
-      return _MessageScreen(
-        icon: Icons.block,
-        message: 'L\'account ${widget.user.email} non è autorizzato a usare il gestionale.',
-        actionLabel: 'ESCI',
-        onAction: () => FirebaseAuth.instance.signOut(),
-      );
+    if (_uid == null || !_checked) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return widget.builder(context, isAdmin: _isAdmin);
+    final device = _device;
+    if (device == null) return WaitingApprovalScreen(uid: _uid!);
+    return widget.builder(context, isAdmin: device.isAdmin);
+  }
+}
+
+/// Telefono non ancora approvato: chiede un nome e invia la richiesta.
+/// Si sblocca da solo appena un telefono admin lo approva.
+class WaitingApprovalScreen extends StatefulWidget {
+  final String uid;
+  const WaitingApprovalScreen({super.key, required this.uid});
+
+  @override
+  State<WaitingApprovalScreen> createState() => _WaitingApprovalScreenState();
+}
+
+class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
+  final _name = TextEditingController();
+  bool _sent = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    DeviceService.instance.hasPendingRequest(widget.uid).then((sent) {
+      if (mounted && sent) setState(() => _sent = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await DeviceService.instance.requestAccess(widget.uid, _name.text);
+      if (mounted) setState(() => _sent = true);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Richiesta non inviata: controlla la connessione.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final code = DeviceService.shortCode(widget.uid);
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(Icons.beach_access, size: 64, color: Colors.green.shade700),
+                  const SizedBox(height: 12),
+                  Text('BAGNI CARLA 98',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
+                  const SizedBox(height: 24),
+                  Text(
+                    _sent ? 'Richiesta inviata!' : 'Questo telefono non è ancora abilitato',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _sent
+                        ? 'Chiedi a chi gestisce il gestionale di approvarlo dal suo telefono, in "Telefoni".\n'
+                            'L\'app si aprirà da sola appena approvato.'
+                        : 'Scrivi un nome per riconoscerlo e invia la richiesta.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 20),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Column(children: [
+                        const Text('Codice del telefono'),
+                        Text(code, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 4)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (!_sent) ...[
+                    TextField(
+                      controller: _name,
+                      maxLength: DeviceService.maxNameLength,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome del telefono (es. Telefono di mamma)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: _busy ? null : _send,
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                      child: _busy
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('CHIEDI L\'ACCESSO', style: TextStyle(fontSize: 16)),
+                    ),
+                  ] else
+                    const Center(child: CircularProgressIndicator()),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_error!, style: TextStyle(color: Colors.red.shade800), textAlign: TextAlign.center),
+                  ],
+                  const SizedBox(height: 24),
+                  const AppVersionText(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -127,149 +242,6 @@ class _MessageScreen extends StatelessWidget {
             const SizedBox(height: 24),
             ElevatedButton(onPressed: onAction, child: Text(actionLabel)),
           ]),
-        ),
-      ),
-    );
-  }
-}
-
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _busy = false;
-  bool _obscure = true;
-  String? _error;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  String _messageFor(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'invalid-email':
-        return 'Email non valida.';
-      case 'invalid-credential':
-      case 'wrong-password':
-      case 'user-not-found':
-        return 'Email o password errate.';
-      case 'user-disabled':
-        return 'Questo account è stato disattivato.';
-      case 'too-many-requests':
-        return 'Troppi tentativi. Riprova tra qualche minuto.';
-      case 'network-request-failed':
-        return 'Nessuna connessione a internet.';
-      default:
-        return 'Accesso non riuscito (${e.code}).';
-    }
-  }
-
-  Future<void> _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Inserisci email e password.');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
-    } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => _error = _messageFor(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _resetPassword() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Scrivi la tua email e poi premi "Password dimenticata?".');
-      return;
-    }
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Se l\'account esiste, riceverai un\'email a $email per reimpostare la password.')),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => _error = _messageFor(e));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Icon(Icons.beach_access, size: 64, color: Colors.green.shade700),
-                  const SizedBox(height: 12),
-                  Text('BAGNI CARLA 98',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscure,
-                    autofillHints: const [AutofillHints.password],
-                    onSubmitted: (_) => _login(),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: TextStyle(color: Colors.red.shade800), textAlign: TextAlign.center),
-                  ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _busy ? null : _login,
-                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                    child: _busy
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('ACCEDI', style: TextStyle(fontSize: 16)),
-                  ),
-                  TextButton(onPressed: _busy ? null : _resetPassword, child: const Text('Password dimenticata?')),
-                  const SizedBox(height: 16),
-                  const AppVersionText(),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );

@@ -17,9 +17,13 @@ App Flutter (`applicazione_gestionale/`) con Firebase Authentication e Cloud Fir
 |---|---|---|
 | ![Scheda](screenshots/04_scheda_prenotazione.png) | ![Elenco](screenshots/05_elenco_ombrellone.png) | ![Annulla](screenshots/06_annulla_eliminazione.png) |
 
-| Arrivi e partenze | Incassi e statistiche | Login |
+| Arrivi e partenze | Incassi e statistiche | Telefono nuovo |
 |---|---|---|
-| ![Arrivi](screenshots/07_arrivi.png) | ![Statistiche](screenshots/08_statistiche.png) | ![Login](screenshots/09_login.png) |
+| ![Arrivi](screenshots/07_arrivi.png) | ![Statistiche](screenshots/08_statistiche.png) | ![Telefono in attesa](screenshots/09_attesa_approvazione.png) |
+
+| Telefoni (approvazione) |
+|---|
+| ![Telefoni](screenshots/10_telefoni.png) |
 
 Le anteprime (dati di esempio, formato telefono) si rigenerano con:
 `cd applicazione_gestionale` e poi `flutter test screenshots_test --update-goldens`.
@@ -43,38 +47,43 @@ Le anteprime (dati di esempio, formato telefono) si rigenerano con:
 - **Editor mappa** e **Reset stagione**: solo per gli admin. L'editor non permette di togliere un ombrellone
   che ha prenotazioni.
 
-## Sicurezza
+## Sicurezza (senza login)
 
-- Accesso con email e password (Firebase Authentication). Possono entrare solo gli account elencati nella
-  collezione `utenti`.
-- Le [regole Firestore](firestore.rules) controllano chi può leggere e scrivere e anche **i dati**: campi ammessi,
-  tipi, lunghezze, importi non negativi, fine dopo l'inizio.
-- L'app scarica solo le prenotazioni della stagione in corso, con un solo listener condiviso, per restare lontano
-  dai limiti del piano gratuito di Firebase.
+- **Nessuna schermata di login e nessuna password.** Ogni telefono entra in Firebase da solo, in modo
+  invisibile (accesso anonimo), e riceve un codice univoco.
+- Un telefono nuovo mostra "in attesa di approvazione". Un telefono admin lo approva da **Telefoni**
+  e da quel momento l'app si apre direttamente. Si può togliere l'accesso in qualsiasi momento.
+- Le [regole Firestore](firestore.rules) fanno vedere i dati **solo ai telefoni approvati** (collezione
+  `dispositivi`) e controllano anche i dati: campi ammessi, tipi, lunghezze, importi non negativi,
+  fine dopo l'inizio. Un estraneo che si procura l'app non vede niente.
+- "Ultima modifica" mostra il nome del telefono (es. "Telefono di mamma").
+- L'app scarica solo le prenotazioni della stagione in corso, con un solo collegamento condiviso, per restare
+  lontano dai limiti del piano gratuito di Firebase. Lo spazio (1 GB gratis) non è un problema.
 
 ## Configurazione Firebase (una volta sola)
 
-Esegui i passaggi **in questo ordine**: le regole vanno pubblicate solo quando tutti i telefoni hanno la nuova
-versione, perché la versione vecchia (senza login) smette di funzionare appena le regole sono attive.
+1. **Authentication → Sign-in method**: attiva **Anonimo** (Anonymous).
+2. Installa la nuova versione dell'app sul **tuo** telefono e aprila: scrivi un nome (es. "Telefono di Ale")
+   e premi **Chiedi l'accesso**.
+3. **Firestore Database → Dati**: apri la collezione `richieste`, trova il documento con il nome del tuo telefono
+   e **copia il suo ID** (la lunga sequenza di lettere e numeri).
+4. Crea la collezione `dispositivi` con un documento che ha **come ID quello copiato** e i campi:
+   - `nome` (stringa) = il nome del telefono
+   - `ruolo` (stringa) = `admin`
+5. L'app sul tuo telefono si sblocca da sola. Al primo avvio converte anche le prenotazioni salvate in formati
+   vecchi (una volta sola).
+6. Sugli altri telefoni installa l'app e premi **Chiedi l'accesso**; tu li approvi dalla schermata **Telefoni**.
+7. Quando tutti i telefoni sono approvati: **Firestore Database → Regole**, incolla il contenuto di
+   [`firestore.rules`](firestore.rules) e premi *Pubblica*.
 
-1. **Authentication → Sign-in method**: attiva *Email/Password*.
-2. **Authentication → Users → Add user**: crea un account per ogni persona che usa il gestionale.
-3. **Authentication → Settings → User actions**: togli la spunta a *Enable create (sign-up)*,
-   così nessuno può crearsi un account da solo.
-4. **Firestore Database → Dati**: crea la collezione `utenti`. Per ogni persona aggiungi un documento con:
-   - **ID documento** = email dell'account, tutta in minuscolo (es. `mario.rossi@gmail.com`)
-   - campo `ruolo` (stringa) = `admin` oppure `staff`
-5. Installa la nuova versione dell'app su tutti i telefoni.
-6. Fai il primo accesso con un account **admin**: l'app converte automaticamente le prenotazioni salvate
-   in formati vecchi (una volta sola).
-7. **Firestore Database → Regole**: incolla il contenuto di [`firestore.rules`](firestore.rules) e premi *Pubblica*.
+Se un telefono reinstalla l'app o cancella i dati dell'app, riceve un codice nuovo e va approvato di nuovo.
 
 ## Ruoli
 
-| Ruolo | Prenotazioni, arrivi, incassi | Editor mappa | Reset stagione |
-|---|---|---|---|
-| `staff` | ✅ | — | — |
-| `admin` | ✅ | ✅ | ✅ |
+| Ruolo | Prenotazioni, arrivi, incassi | Editor mappa, reset, telefoni |
+|---|---|---|
+| `staff` (Solo prenotazioni) | ✅ | — |
+| `admin` (Famiglia: tutto) | ✅ | ✅ |
 
 ## Versioni e rilasci
 
@@ -98,7 +107,7 @@ Lo script aumenta la versione, esegue i test, crea l'APK in `rilasci/`, fa commi
 | `lib/availability.dart` | Logica pura: disponibilità, conflitti, arrivi, ricerca, statistiche, telefono |
 | `lib/booking_repository.dart` | Lettura delle prenotazioni (un solo listener) e migrazione dati |
 | `lib/booking_service.dart` | Scritture: validazione, controllo conflitti sul server, chi ha modificato |
-| `lib/auth_gate.dart` | Login e ruoli |
+| `lib/device_service.dart`, `lib/auth_gate.dart`, `lib/devices_screen.dart` | Accesso senza login: approvazione dei telefoni |
 | `lib/*_screen.dart`, `lib/booking_form.dart` | Schermate |
 
 ## Sviluppo e test

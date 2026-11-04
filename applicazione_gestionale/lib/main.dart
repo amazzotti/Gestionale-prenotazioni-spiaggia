@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -11,6 +10,7 @@ import 'auth_gate.dart';
 import 'availability.dart';
 import 'beach_editor_screen.dart';
 import 'booking_repository.dart';
+import 'devices_screen.dart';
 import 'layout_repository.dart';
 import 'map_screen.dart';
 import 'stats_screen.dart';
@@ -207,21 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadBeachConfiguration();
   }
 
-  Future<void> _logout(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Uscire?'),
-        content: Text('Sei collegato come ${FirebaseAuth.instance.currentUser?.email ?? ''}.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('ANNULLA')),
-          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('ESCI')),
-        ],
-      ),
-    );
-    if (ok == true) await FirebaseAuth.instance.signOut();
-  }
-
   Widget _todaySummary() {
     return ValueListenableBuilder<List<Booking>?>(
       valueListenable: BookingRepository.instance.bookings,
@@ -265,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.green,
         actions: [
           IconButton(icon: const Icon(Icons.search), onPressed: () => _showSearch(context), tooltip: 'Cerca Prenotazione'),
-          IconButton(icon: const Icon(Icons.logout), onPressed: () => _logout(context), tooltip: 'Esci'),
         ],
       ),
       body: _isLoading
@@ -297,6 +281,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (widget.isAdmin) ...[
                         const Divider(height: 32),
                         _menuButton(Icons.edit_location_alt_outlined, 'Editor Mappa Spiaggia', () => _openEditor(context)),
+                        _menuButton(Icons.smartphone, 'Telefoni',
+                            () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen()))),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () => _showResetDialog(context),

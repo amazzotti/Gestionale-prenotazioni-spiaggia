@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -21,6 +22,8 @@ import 'package:applicazione_gestionale/arrivi_oggi_screen.dart';
 import 'package:applicazione_gestionale/auth_gate.dart';
 import 'package:applicazione_gestionale/booking_repository.dart';
 import 'package:applicazione_gestionale/booking_service.dart';
+import 'package:applicazione_gestionale/device_service.dart';
+import 'package:applicazione_gestionale/devices_screen.dart';
 import 'package:applicazione_gestionale/layout_repository.dart';
 import 'package:applicazione_gestionale/main.dart';
 import 'package:applicazione_gestionale/map_screen.dart';
@@ -153,10 +156,18 @@ void main() {
     repo = BookingRepository(firestore: db, clock: () => today.add(const Duration(hours: 10)));
     BookingRepository.instance = repo;
     LayoutRepository.instance = LayoutRepository(firestore: db);
-    BookingService.instance = BookingService(repository: repo, currentUserEmail: () => 'mamma@gmail.com');
+    BookingService.instance = BookingService(repository: repo, currentUserName: () => 'Telefono di mamma');
+    DeviceService.instance = DeviceService(
+      firestore: db,
+      auth: MockFirebaseAuth(signedIn: true, mockUser: MockUser(uid: 'aleX42pq', isAnonymous: true)),
+    );
+    await db.collection('dispositivi').doc('aleX42pq').set({'nome': 'Telefono di Ale', 'ruolo': 'admin'});
+    await db.collection('dispositivi').doc('mAm7Hk2b').set({'nome': 'Telefono di mamma', 'ruolo': 'admin'});
+    await db.collection('dispositivi').doc('pApa91Zt').set({'nome': 'Tablet della cassa', 'ruolo': 'staff'});
+    await db.collection('richieste').doc('k7Qm2xPa9Lz').set({'nome': 'Telefono di Giulia', 'richiestoIl': Timestamp.now()});
     final bookings = sampleBookings();
     for (final b in bookings) {
-      await db.collection('bookings').doc(b.id).set({...b.toFirestore(), 'updatedBy': 'mamma@gmail.com', 'updatedAt': Timestamp.now()});
+      await db.collection('bookings').doc(b.id).set({...b.toFirestore(), 'updatedBy': 'Telefono di mamma', 'updatedAt': Timestamp.now()});
     }
     repo.bookings.value = (await db.collection('bookings').get()).docs.map(Booking.fromFirestore).toList();
     sectors = BeachSector.sorted(layout.map(BeachSector.fromMap));
@@ -239,9 +250,18 @@ void main() {
     await shot(tester, '08_statistiche');
   });
 
-  testWidgets('09 login', (tester) async {
+  testWidgets('09 telefono in attesa di approvazione', (tester) async {
     await phone(tester);
-    await tester.pumpWidget(app(const LoginScreen()));
-    await shot(tester, '09_login');
+    await tester.pumpWidget(app(const WaitingApprovalScreen(uid: 'gIu5Rx8Tq2W')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.enterText(find.byType(TextField), 'Telefono di Giulia');
+    await shot(tester, '09_attesa_approvazione');
+  });
+
+  testWidgets('10 telefoni', (tester) async {
+    await phone(tester);
+    await tester.pumpWidget(app(const DevicesScreen()));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await shot(tester, '10_telefoni');
   });
 }

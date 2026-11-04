@@ -31,7 +31,7 @@ void main() {
   setUp(() {
     db = FakeFirebaseFirestore();
     final repo = BookingRepository(firestore: db, clock: () => DateTime(2027, 7, 1));
-    service = BookingService(repository: repo, currentUserEmail: () => 'mamma@test.it');
+    service = BookingService(repository: repo, currentUserName: () => 'mamma@test.it');
   });
 
   Future<Map<String, dynamic>> docData(String id) async => (await db.collection('bookings').doc(id).get()).data()!;

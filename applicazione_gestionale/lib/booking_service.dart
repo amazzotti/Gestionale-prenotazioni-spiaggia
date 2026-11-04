@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'availability.dart';
 import 'booking_repository.dart';
+import 'device_service.dart';
 import 'models.dart';
 
 /// L'ombrellone è già occupato nel periodo richiesto.
@@ -28,9 +28,9 @@ class BookingValidationException implements Exception {
 ///   non possono prenotare lo stesso posto negli stessi giorni;
 /// - registra chi ha fatto l'ultima modifica e quando.
 class BookingService {
-  BookingService({BookingRepository? repository, String? Function()? currentUserEmail})
+  BookingService({BookingRepository? repository, String? Function()? currentUserName})
       : _repository = repository,
-        _currentUserEmail = currentUserEmail;
+        _currentUserName = currentUserName;
 
   static BookingService? _instance;
   static BookingService get instance => _instance ??= BookingService();
@@ -38,23 +38,20 @@ class BookingService {
   static set instance(BookingService service) => _instance = service;
 
   final BookingRepository? _repository;
-  final String? Function()? _currentUserEmail;
+  final String? Function()? _currentUserName;
 
   BookingRepository get repository => _repository ?? BookingRepository.instance;
   CollectionReference<Map<String, dynamic>> get _col => repository.collection;
 
-  String get _userEmail {
-    if (_currentUserEmail != null) return _currentUserEmail() ?? '';
-    try {
-      return FirebaseAuth.instance.currentUser?.email ?? '';
-    } catch (_) {
-      return '';
-    }
+  /// Chi sta modificando: il nome del telefono (es. "Telefono di mamma").
+  String get _userName {
+    if (_currentUserName != null) return _currentUserName() ?? '';
+    return DeviceService.instance.currentDeviceName ?? '';
   }
 
   Map<String, dynamic> _audit({bool create = false}) => {
         'updatedAt': FieldValue.serverTimestamp(),
-        'updatedBy': _userEmail,
+        'updatedBy': _userName,
         if (create) 'createdAt': FieldValue.serverTimestamp(),
       };
 

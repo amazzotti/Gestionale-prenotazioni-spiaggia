@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:applicazione_gestionale/arrivi_oggi_screen.dart';
-import 'package:applicazione_gestionale/auth_gate.dart';
 import 'package:applicazione_gestionale/booking_repository.dart';
 import 'package:applicazione_gestionale/booking_service.dart';
 import 'package:applicazione_gestionale/map_screen.dart';
@@ -43,7 +42,7 @@ void main() {
     db = FakeFirebaseFirestore();
     repo = BookingRepository(firestore: db, clock: () => DateTime(2027, 7, 1));
     BookingRepository.instance = repo;
-    BookingService.instance = BookingService(repository: repo, currentUserEmail: () => 'test@test.it');
+    BookingService.instance = BookingService(repository: repo, currentUserName: () => 'test@test.it');
   });
 
   Future<void> useBigScreen(WidgetTester tester) async {
@@ -51,18 +50,6 @@ void main() {
     tester.view.devicePixelRatio = 2.0;
     addTearDown(tester.view.reset);
   }
-
-  testWidgets('Login: chiede email e password prima di contattare il server', (tester) async {
-    await tester.pumpWidget(app(const LoginScreen()));
-    expect(find.text('BAGNI CARLA 98'), findsOneWidget);
-    await tester.tap(find.text('ACCEDI'));
-    await tester.pump();
-    expect(find.text('Inserisci email e password.'), findsOneWidget);
-
-    await tester.tap(find.text('Password dimenticata?'));
-    await tester.pump();
-    expect(find.textContaining('Scrivi la tua email'), findsOneWidget);
-  });
 
   group('Mappa', () {
     final range = DateTimeRange(start: DateTime(2027, 7, 1), end: DateTime(2027, 7, 10));
