@@ -32,27 +32,22 @@ void main() {
     });
   });
 
-  group('firstFreeStretch e umbrellaStatus', () {
+  group('firstFreeStretch', () {
     test('tutto libero', () {
       final range = r(d(8, 1), d(8, 3));
       expect(firstFreeStretch(const [], range)!.start, d(8, 1));
-      expect(umbrellaStatus(const [], range), UmbrellaStatus.free);
     });
 
-    test('occupato in parte: trova il primo buco', () {
+    test('trova il primo buco nel periodo', () {
       final range = r(d(7, 4), d(7, 11));
-      final inRange = bookingsInRange('Mare-1', range, all);
-      final free = firstFreeStretch(inRange, range)!;
+      final free = firstFreeStretch(bookingsInRange('Mare-1', range, all), range)!;
       expect(free.start, d(7, 6));
       expect(free.end, d(7, 9));
-      expect(umbrellaStatus(inRange, range), UmbrellaStatus.partial);
     });
 
-    test('occupato per tutto il periodo', () {
+    test('tutto occupato', () {
       final range = r(d(7, 5), d(7, 15));
-      final inRange = bookingsInRange('Mare-2', range, all);
-      expect(firstFreeStretch(inRange, range), isNull);
-      expect(umbrellaStatus(inRange, range), UmbrellaStatus.full);
+      expect(firstFreeStretch(bookingsInRange('Mare-2', range, all), range), isNull);
     });
 
     test('attraversa il cambio dell\'ora legale senza saltare giorni', () {
@@ -61,6 +56,56 @@ void main() {
       final free = firstFreeStretch(busy, range)!;
       expect(free.start, DateTime(2027, 10, 31));
       expect(free.end, DateTime(2027, 11, 1));
+    });
+  });
+
+  group('umbrellaTimeline: prima, nel periodo, dopo', () {
+    final season = [
+      b('p1', 'Mare-7', d(6, 20), d(6, 25), name: 'Molto prima'),
+      b('p2', 'Mare-7', d(7, 1), d(7, 8), name: 'Prima'),
+      b('n1', 'Mare-7', d(7, 10), d(7, 12), name: 'Nel periodo'),
+      b('a1', 'Mare-7', d(7, 15), d(7, 20), name: 'Dopo'),
+      b('a2', 'Mare-7', d(7, 25), d(7, 30), name: 'Molto dopo'),
+      b('x', 'Mare-8', d(7, 9), d(7, 9), name: 'Altro ombrellone'),
+    ];
+
+    test('trova la precedente più vicina e la successiva più vicina', () {
+      final t = umbrellaTimeline('Mare-7', r(d(7, 10), d(7, 13)), season);
+      expect(t.previous?.clientName, 'Prima');
+      expect(t.inPeriod.map((e) => e.clientName), ['Nel periodo']);
+      expect(t.next?.clientName, 'Dopo');
+      expect(t.freeDaysBefore, 1); // libero il 9
+      expect(t.freeDaysAfter, 1); // libero il 14
+    });
+
+    test('periodo vuoto: mostra comunque prima e dopo', () {
+      final t = umbrellaTimeline('Mare-7', r(d(7, 21), d(7, 23)), season);
+      expect(t.inPeriod, isEmpty);
+      expect(t.previous?.clientName, 'Dopo');
+      expect(t.next?.clientName, 'Molto dopo');
+      expect(t.freeDaysBefore, 0); // finisce il 20, periodo dal 21
+      expect(t.freeDaysAfter, 1); // libero il 24
+    });
+
+    test('esclude la prenotazione che si sta modificando', () {
+      final t = umbrellaTimeline('Mare-7', r(d(7, 10), d(7, 12)), season, excludeId: 'n1');
+      expect(t.inPeriod, isEmpty);
+    });
+
+    test('nessuna prima o dopo', () {
+      final t = umbrellaTimeline('Mare-8', r(d(7, 9), d(7, 9)), season);
+      expect(t.previous, isNull);
+      expect(t.next, isNull);
+      expect(t.freeDaysBefore, isNull);
+    });
+
+    test('freeDaysBetween e freeDaysText', () {
+      expect(freeDaysBetween(d(7, 8), d(7, 9)), 0);
+      expect(freeDaysBetween(d(7, 8), d(7, 12)), 3);
+      expect(freeDaysBetween(DateTime(2027, 10, 30), DateTime(2027, 11, 2)), 2, reason: 'ora legale');
+      expect(freeDaysText(0), 'subito');
+      expect(freeDaysText(1), '1 giorno libero');
+      expect(freeDaysText(4), '4 giorni liberi');
     });
   });
 

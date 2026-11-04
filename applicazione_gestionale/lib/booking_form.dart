@@ -5,6 +5,7 @@ import 'availability.dart';
 import 'booking_service.dart';
 import 'contact.dart';
 import 'models.dart';
+import 'umbrella_timeline_view.dart';
 
 enum BookingFormAction {
   /// Prenotazione salvata (nuova o modificata).
@@ -36,6 +37,7 @@ Future<BookingFormResult?> showBookingForm(
   Booking? existing,
   required DateTimeRange initialRange,
   Map<String, String> knownClients = const {},
+  List<Booking> allBookings = const [],
   DateTime? firstDate,
 }) {
   return showDialog<BookingFormResult>(
@@ -46,6 +48,7 @@ Future<BookingFormResult?> showBookingForm(
       existing: existing,
       initialRange: initialRange,
       knownClients: knownClients,
+      allBookings: allBookings,
       firstDate: firstDate,
     ),
   );
@@ -56,6 +59,9 @@ class BookingFormDialog extends StatefulWidget {
   final Booking? existing;
   final DateTimeRange initialRange;
   final Map<String, String> knownClients;
+
+  /// Prenotazioni della stagione, per mostrare chi c'è prima e dopo su questo ombrellone.
+  final List<Booking> allBookings;
   final DateTime? firstDate;
 
   const BookingFormDialog({
@@ -64,6 +70,7 @@ class BookingFormDialog extends StatefulWidget {
     this.existing,
     required this.initialRange,
     this.knownClients = const {},
+    this.allBookings = const [],
     this.firstDate,
   });
 
@@ -337,6 +344,11 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
                     child: Text(days == 1 ? '1 giorno' : '$days giorni', style: TextStyle(color: Colors.green.shade900)),
                   ),
                 ]),
+              ),
+              const SizedBox(height: 8),
+              NeighborsBox(
+                timeline: umbrellaTimeline(widget.umbrella.id, DateTimeRange(start: _start, end: _end), widget.allBookings,
+                    excludeId: existing?.id),
               ),
               const SizedBox(height: 12),
               Row(children: [

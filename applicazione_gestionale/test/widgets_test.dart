@@ -65,7 +65,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Libero'), findsOneWidget);
-      expect(find.text('In parte'), findsOneWidget);
+      expect(find.text('In parte'), findsNothing, reason: 'niente più arancione');
       expect(find.text('Occupato'), findsOneWidget);
       // anteprima del periodo su due righe
       for (final t in ['01/07', '10/07', '03/07', '04/07']) {
@@ -73,24 +73,48 @@ void main() {
       }
       // L'etichetta di accessibilità inizia con numero e stato (poi segue il testo del quadrato).
       expect(find.bySemanticsLabel(RegExp(r'^Ombrellone 1, occupato(\n|$)')), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp(r'^Ombrellone 2, occupato in parte(\n|$)')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Ombrellone 2, occupato(\n|$)')), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp(r'^Ombrellone 3, libero(\n|$)')), findsOneWidget);
       // € sul quadrato di chi deve ancora pagare (più quello della legenda)
       expect(find.byIcon(Icons.euro), findsNWidgets(2));
       semantics.dispose();
     });
 
-    testWidgets('ombrellone arancione: apre l\'elenco con "prenota i giorni liberi"', (tester) async {
+    testWidgets('pressione lunga: chi c\'era prima, chi c\'è nel periodo e chi arriva dopo', (tester) async {
       await useBigScreen(tester);
-      repo.bookings.value = [booking('b', 'Mare-2', DateTime(2027, 7, 3), DateTime(2027, 7, 4), name: 'Parte')];
+      repo.bookings.value = [
+        booking('p', 'Mare-2', DateTime(2027, 6, 20), DateTime(2027, 6, 28), name: 'Verdi Prima'),
+        booking('b', 'Mare-2', DateTime(2027, 7, 3), DateTime(2027, 7, 4), name: 'Nel Mezzo'),
+        booking('n', 'Mare-2', DateTime(2027, 7, 11), DateTime(2027, 7, 15), name: 'Neri Dopo'),
+      ];
       await tester.pumpWidget(app(MapScreen(beachSectors: sectors, filterDateRange: range)));
       await tester.pump();
 
-      await tester.tap(find.text('2'));
+      await tester.longPress(find.text('2'));
       await tester.pumpAndSettle();
       expect(find.text('Ombrellone 2 · Mare'), findsOneWidget);
-      expect(find.text('Parte'), findsOneWidget);
-      expect(find.textContaining('PRENOTA I GIORNI LIBERI (01/07 - 02/07)'), findsOneWidget);
+      expect(find.text('PRIMA'), findsOneWidget);
+      expect(find.text('Verdi Prima'), findsOneWidget);
+      expect(find.text('poi 2 giorni liberi prima del periodo'), findsOneWidget);
+      expect(find.text('NEL PERIODO 01/07 - 10/07'), findsOneWidget);
+      expect(find.text('Nel Mezzo'), findsOneWidget);
+      expect(find.text('DOPO'), findsOneWidget);
+      expect(find.text('Neri Dopo'), findsOneWidget);
+      expect(find.text('arriva il giorno dopo il periodo'), findsOneWidget);
+    });
+
+    testWidgets('la scheda prenotazione mostra chi c\'è prima e dopo', (tester) async {
+      await useBigScreen(tester);
+      repo.bookings.value = [
+        booking('p', 'Mare-3', DateTime(2027, 6, 25), DateTime(2027, 6, 30), name: 'Gialli'),
+        booking('n', 'Mare-3', DateTime(2027, 7, 14), DateTime(2027, 7, 20), name: 'Blu'),
+      ];
+      await tester.pumpWidget(app(MapScreen(beachSectors: sectors, filterDateRange: range)));
+      await tester.pump();
+      await tester.tap(find.text('3'));
+      await tester.pumpAndSettle();
+      expect(find.text('Prima: Gialli, fino al 30/06 (subito)'), findsOneWidget);
+      expect(find.text('Dopo: Blu, dal 14/07 (3 giorni liberi)'), findsOneWidget);
     });
 
     testWidgets('nuova prenotazione dal form fino al salvataggio su Firestore', (tester) async {

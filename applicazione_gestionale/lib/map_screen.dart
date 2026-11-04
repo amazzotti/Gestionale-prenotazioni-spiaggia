@@ -6,13 +6,13 @@ import 'booking_form.dart';
 import 'booking_repository.dart';
 import 'booking_service.dart';
 import 'models.dart';
+import 'umbrella_timeline_view.dart';
 
 export 'models.dart';
 
 /// Colori della mappa (usati anche nella legenda).
 class MapColors {
   static final free = Colors.green.shade500;
-  static final partial = Colors.orange.shade700;
   static final full = Colors.red.shade500;
   static final walkway = Colors.brown.shade200;
   static final empty = Colors.grey.shade200.withValues(alpha: 0.5);
@@ -105,6 +105,7 @@ class _MapScreenState extends State<MapScreen> {
       existing: existing,
       initialRange: initialRange ?? _range,
       knownClients: knownClients(all),
+      allBookings: all,
       firstDate: _repo.windowStart,
     );
     if (result == null || !mounted) return;
@@ -334,7 +335,6 @@ class _MapScreenState extends State<MapScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Wrap(spacing: 12, runSpacing: 4, alignment: WrapAlignment.center, children: [
         item(MapColors.free, 'Libero'),
-        item(MapColors.partial, 'In parte'),
         item(MapColors.full, 'Occupato'),
         Row(mainAxisSize: MainAxisSize.min, children: [
           _badge(Icons.euro, Colors.orange.shade900),
@@ -394,13 +394,8 @@ class _MapScreenState extends State<MapScreen> {
   Widget _buildUmbrella(Umbrella umbrella, List<Booking> allBookings) {
     final range = _effectiveRange;
     final inRange = bookingsInRange(umbrella.id, range, allBookings);
-    final status = umbrellaStatus(inRange, range);
-    final isBooked = status != UmbrellaStatus.free;
-    final color = switch (status) {
-      UmbrellaStatus.free => MapColors.free,
-      UmbrellaStatus.partial => MapColors.partial,
-      UmbrellaStatus.full => MapColors.full,
-    };
+    final isBooked = inRange.isNotEmpty;
+    final color = isBooked ? MapColors.full : MapColors.free;
     final inMode = _isMoveMode || _isExtraMode;
     final hasDue = inRange.any((b) => b.amountDue > 0);
     final arrived = _isSingleDay && inRange.isNotEmpty && inRange.every((b) => b.arrived);
@@ -419,18 +414,14 @@ class _MapScreenState extends State<MapScreen> {
 
     return Semantics(
       button: true,
-      label: 'Ombrellone ${umbrella.simpleId}, ${switch (status) {
-        UmbrellaStatus.free => 'libero',
-        UmbrellaStatus.partial => 'occupato in parte',
-        UmbrellaStatus.full => 'occupato',
-      }}',
+      label: 'Ombrellone ${umbrella.simpleId}, ${isBooked ? 'occupato' : 'libero'}',
       child: GestureDetector(
         onTap: () {
           if (_isExtraMode) {
             if (!isBooked) _createExtensionOn(umbrella);
           } else if (_isMoveMode) {
             if (!isBooked) _moveBookingTo(umbrella);
-          } else if (status == UmbrellaStatus.partial || inRange.length > 1) {
+          } else if (inRange.length > 1) {
             _showUmbrellaBookings(umbrella, allBookings);
           } else {
             _openForm(umbrella, inRange.firstOrNull, allBookings);
@@ -476,13 +467,18 @@ class _MapScreenState extends State<MapScreen> {
         child: Icon(icon, size: 10, color: color),
       );
 
-  /// Scheda con tutte le prenotazioni della stagione per un ombrellone.
-  /// Si apre con pressione lunga, o con un tocco se l'ombrellone è arancione.
+  /// Quadro dell'ombrellone: chi c'era PRIMA, chi c'è NEL PERIODO, chi arriva DOPO, più tutta la stagione.
+  /// Si apre con pressione lunga, o con un tocco se nel periodo ci sono più prenotazioni.
   void _showUmbrellaBookings(Umbrella umbrella, List<Booking> allBookings) {
     final range = _range;
+    final timeline = umbrellaTimeline(umbrella.id, range, allBookings);
     final season = allBookings.where((b) => b.umbrellaId == umbrella.id).toList()
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
-    final freeStretch = firstFreeStretch(bookingsInRange(umbrella.id, range, allBookings), range);
+    final freeStretch = firstFreeStretch(timeline.inPeriod, range);
+    void open(Booking b, BuildContext sheetContext) {
+      Navigator.pop(sheetContext);
+      _openForm(umbrella, b, allBookings);
+    }
 
     showModalBottomSheet(
       context: context,
@@ -500,48 +496,35 @@ class _MapScreenState extends State<MapScreen> {
                 child: Text('Ombrellone ${umbrella.simpleId} · ${umbrella.sectorName}',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Text('In grassetto le prenotazioni nel periodo ${_shortFmt.format(range.start)} - ${_shortFmt.format(range.end)}',
-                    style: TextStyle(color: Colors.grey.shade700)),
-              ),
-              const SizedBox(height: 8),
-              if (season.isEmpty)
-                const Padding(padding: EdgeInsets.all(16), child: Text('Nessuna prenotazione in questa stagione.'))
-              else
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final b in season)
-                        Builder(builder: (_) {
-                          final inPeriod = b.overlaps(range);
-                          return ListTile(
-                            leading: Icon(Icons.circle, size: 14, color: inPeriod ? MapColors.full : Colors.grey.shade400),
-                            title: Text(b.clientName, style: TextStyle(fontWeight: inPeriod ? FontWeight.bold : FontWeight.normal)),
-                            subtitle: Text([
-                              'dal ${_shortFmt.format(b.startDate)} al ${_shortFmt.format(b.endDate)}',
-                              if (b.amountDue > 0) 'da incassare ${formatEuro(b.amountDue)}',
-                              if (b.notes.isNotEmpty) b.notes,
-                            ].join('\n')),
-                            isThreeLine: b.notes.isNotEmpty || b.amountDue > 0,
-                            trailing: const Icon(Icons.edit, size: 20),
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              _openForm(umbrella, b, allBookings);
-                            },
-                          );
-                        }),
-                    ],
-                  ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    UmbrellaTimelineView(timeline: timeline, onOpen: (b) => open(b, sheetContext)),
+                    if (season.length > timeline.inPeriod.length + (timeline.previous == null ? 0 : 1) + (timeline.next == null ? 0 : 1))
+                      ExpansionTile(
+                        title: Text('Tutta la stagione (${season.length} prenotazioni)'),
+                        children: [
+                          for (final b in season)
+                            ListTile(
+                              dense: true,
+                              title: Text(b.clientName),
+                              subtitle: Text('dal ${_shortFmt.format(b.startDate)} al ${_shortFmt.format(b.endDate)}'),
+                              trailing: const Icon(Icons.edit, size: 18),
+                              onTap: () => open(b, sheetContext),
+                            ),
+                        ],
+                      ),
+                  ],
                 ),
+              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.add),
-                  label: Text(freeStretch != null
-                      ? 'PRENOTA I GIORNI LIBERI (${_shortFmt.format(freeStretch.start)} - ${_shortFmt.format(freeStretch.end)})'
-                      : 'NUOVA PRENOTAZIONE'),
+                  label: Text(freeStretch == null
+                      ? 'NUOVA PRENOTAZIONE'
+                      : 'NUOVA PRENOTAZIONE DAL ${_shortFmt.format(freeStretch.start)} AL ${_shortFmt.format(freeStretch.end)}'),
                   onPressed: () {
                     Navigator.pop(sheetContext);
                     _openForm(umbrella, null, allBookings, initialRange: freeStretch);

@@ -6,18 +6,6 @@ import 'models.dart';
 /// Logica "pura" del gestionale: nessun accesso a Firestore o all'interfaccia,
 /// così si può testare facilmente.
 
-/// Stato di un ombrellone per un periodo.
-enum UmbrellaStatus {
-  /// Libero per tutto il periodo.
-  free,
-
-  /// Occupato solo per una parte del periodo.
-  partial,
-
-  /// Occupato per tutto il periodo.
-  full,
-}
-
 /// Prenotazioni di un ombrellone che toccano il periodo, ordinate per data.
 List<Booking> bookingsInRange(String umbrellaId, DateTimeRange? range, Iterable<Booking> all) {
   if (range == null) return const [];
@@ -42,10 +30,59 @@ DateTimeRange? firstFreeStretch(Iterable<Booking> bookings, DateTimeRange range)
   return freeStart == null ? null : DateTimeRange(start: freeStart, end: freeEnd!);
 }
 
-UmbrellaStatus umbrellaStatus(Iterable<Booking> bookingsInPeriod, DateTimeRange? range) {
-  if (range == null || bookingsInPeriod.isEmpty) return UmbrellaStatus.free;
-  return firstFreeStretch(bookingsInPeriod, range) == null ? UmbrellaStatus.full : UmbrellaStatus.partial;
+/// Quadro di un ombrellone attorno a un periodo: chi c'era prima, chi c'è, chi arriva dopo.
+class UmbrellaTimeline {
+  /// Ultima prenotazione finita prima del periodo (null = nessuna).
+  final Booking? previous;
+
+  /// Prenotazioni che toccano il periodo, in ordine di data.
+  final List<Booking> inPeriod;
+
+  /// Prima prenotazione che inizia dopo il periodo (null = nessuna).
+  final Booking? next;
+
+  final DateTimeRange range;
+
+  const UmbrellaTimeline({required this.range, this.previous, this.inPeriod = const [], this.next});
+
+  /// Giorni liberi tra la prenotazione precedente e l'inizio del periodo.
+  int? get freeDaysBefore => previous == null ? null : freeDaysBetween(previous!.endDate, range.start);
+
+  /// Giorni liberi tra la fine del periodo e la prenotazione successiva.
+  int? get freeDaysAfter => next == null ? null : freeDaysBetween(range.end, next!.startDate);
 }
+
+/// Giorni liberi tra la fine di una prenotazione e l'inizio di un'altra (0 = una subito dopo l'altra).
+int freeDaysBetween(DateTime end, DateTime start) {
+  final diff = DateTime.utc(start.year, start.month, start.day).difference(DateTime.utc(end.year, end.month, end.day)).inDays - 1;
+  return diff < 0 ? 0 : diff;
+}
+
+/// Chi c'era prima, chi c'è nel periodo e chi arriva dopo su un ombrellone.
+/// [excludeId] esclude la prenotazione che si sta modificando.
+UmbrellaTimeline umbrellaTimeline(String umbrellaId, DateTimeRange range, Iterable<Booking> all, {String? excludeId}) {
+  final start = dayOnly(range.start);
+  final end = dayOnly(range.end);
+  Booking? previous;
+  Booking? next;
+  final inPeriod = <Booking>[];
+  for (final b in all) {
+    if (b.umbrellaId != umbrellaId) continue;
+    if (excludeId != null && excludeId.isNotEmpty && b.id == excludeId) continue;
+    if (dayOnly(b.endDate).isBefore(start)) {
+      if (previous == null || b.endDate.isAfter(previous.endDate)) previous = b;
+    } else if (dayOnly(b.startDate).isAfter(end)) {
+      if (next == null || b.startDate.isBefore(next.startDate)) next = b;
+    } else {
+      inPeriod.add(b);
+    }
+  }
+  inPeriod.sort((a, b) => a.startDate.compareTo(b.startDate));
+  return UmbrellaTimeline(range: DateTimeRange(start: start, end: end), previous: previous, inPeriod: inPeriod, next: next);
+}
+
+/// "subito", "1 giorno libero", "3 giorni liberi".
+String freeDaysText(int days) => days == 0 ? 'subito' : (days == 1 ? '1 giorno libero' : '$days giorni liberi');
 
 /// Prima prenotazione che si sovrappone a [candidate] sullo stesso ombrellone
 /// (esclusa la prenotazione stessa, se è una modifica). null = nessun conflitto.
