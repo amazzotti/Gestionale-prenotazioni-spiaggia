@@ -6,6 +6,7 @@ import 'booking_form.dart';
 import 'booking_repository.dart';
 import 'booking_service.dart';
 import 'models.dart';
+import 'planner_screen.dart';
 import 'umbrella_timeline_view.dart';
 
 export 'models.dart';
@@ -213,6 +214,14 @@ class _MapScreenState extends State<MapScreen> {
                 const SizedBox(width: 8),
               ]
             : [
+                IconButton(
+                  icon: const Icon(Icons.view_timeline_outlined),
+                  tooltip: 'Planner',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => PlannerScreen(beachSectors: widget.beachSectors, highlightRange: _range)),
+                  ),
+                ),
                 DropdownButton<String?>(
                   value: _selectedSectorName,
                   hint: const Text('Settore', style: TextStyle(color: Colors.black87)),

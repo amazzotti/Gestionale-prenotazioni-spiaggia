@@ -13,6 +13,7 @@ import 'booking_repository.dart';
 import 'devices_screen.dart';
 import 'layout_repository.dart';
 import 'map_screen.dart';
+import 'planner_screen.dart';
 import 'stats_screen.dart';
 
 Future<void> main() async {
@@ -150,6 +151,11 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(beachSectors: _beachSectors)));
   }
 
+  void _openPlanner(BuildContext context) {
+    if (!_ensureMap(context)) return;
+    Navigator.push(context, MaterialPageRoute(builder: (context) => PlannerScreen(beachSectors: _beachSectors)));
+  }
+
   void _openStats(BuildContext context) {
     if (!_ensureMap(context)) return;
     Navigator.push(context, MaterialPageRoute(builder: (context) => StatsScreen(beachSectors: _beachSectors)));
@@ -274,6 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 16),
                       _menuButton(Icons.add_circle_outline, 'Nuova Prenotazione', () => _startNewBooking(context)),
                       _menuButton(Icons.map_outlined, 'Mappa di Oggi', () => _openTodayMap(context)),
+                      _menuButton(Icons.view_timeline_outlined, 'Planner (calendario)', () => _openPlanner(context)),
                       _menuButton(Icons.people_outline, 'Arrivi e Partenze',
                           () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArriviOggiScreen()))),
                       _menuButton(Icons.search, 'Cerca, Modifica o Cancella', () => _showSearch(context)),
