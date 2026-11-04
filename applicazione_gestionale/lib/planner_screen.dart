@@ -5,6 +5,7 @@ import 'availability.dart';
 import 'booking_form.dart';
 import 'booking_repository.dart';
 import 'booking_service.dart';
+import 'help_screen.dart';
 import 'models.dart';
 
 /// Planner a calendario: una riga per ombrellone, una colonna per giorno.
@@ -333,6 +334,14 @@ class _PlannerScreenState extends State<PlannerScreen> {
         swatch(Colors.red.shade400, 'Nel periodo ${_shortFmt.format(_highlight.start)}${_highlight.start == _highlight.end ? '' : '-${_shortFmt.format(_highlight.end)}'}'),
         swatch(Colors.blueGrey.shade300, 'Prima e dopo'),
         const Text('Tocca uno spazio vuoto per prenotare', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        InkWell(
+          onTap: () => HelpScreen.open(context, HelpTopic.planner),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.help_outline, size: 16, color: Colors.green.shade800),
+            const SizedBox(width: 2),
+            Text('Guida', style: TextStyle(fontSize: 12, color: Colors.green.shade800, fontWeight: FontWeight.bold)),
+          ]),
+        ),
       ]),
     );
   }

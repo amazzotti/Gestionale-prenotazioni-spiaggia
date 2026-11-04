@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'device_service.dart';
+import 'help_screen.dart';
 
 /// Gestione dei telefoni (solo admin): approvare quelli nuovi e togliere l'accesso.
 class DevicesScreen extends StatelessWidget {
@@ -100,7 +101,7 @@ class DevicesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final myUid = _service.currentUid;
     return Scaffold(
-      appBar: AppBar(title: const Text('Telefoni'), backgroundColor: Colors.green),
+      appBar: AppBar(title: const Text('Telefoni'), backgroundColor: Colors.green, actions: const [HelpButton(HelpTopic.telefoni)]),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [

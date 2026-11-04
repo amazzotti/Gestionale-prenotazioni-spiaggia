@@ -6,7 +6,9 @@ import 'booking_form.dart';
 import 'booking_repository.dart';
 import 'booking_service.dart';
 import 'models.dart';
+import 'help_screen.dart';
 import 'planner_screen.dart';
+import 'suggestions_sheet.dart';
 import 'umbrella_timeline_view.dart';
 
 export 'models.dart';
@@ -24,7 +26,11 @@ class MapScreen extends StatefulWidget {
   final String? highlightUmbrellaId;
   final DateTimeRange? filterDateRange;
   final List<BeachSector> beachSectors;
-  const MapScreen({super.key, this.highlightUmbrellaId, this.filterDateRange, required this.beachSectors});
+
+  /// Apre subito "Dove la metto?" (usato da "Nuova prenotazione").
+  final bool openSuggestions;
+
+  const MapScreen({super.key, this.highlightUmbrellaId, this.filterDateRange, required this.beachSectors, this.openSuggestions = false});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -97,9 +103,26 @@ class _MapScreenState extends State<MapScreen> {
     if (picked != null) setState(() => _range = DateTimeRange(start: dayOnly(picked.start), end: dayOnly(picked.end)));
   }
 
+  // ---------- Suggerimenti ----------
+
+  bool _suggestionsShown = false;
+
+  void _openSuggestions() {
+    final all = _repo.bookings.value;
+    if (all == null) return;
+    showSuggestionsSheet(
+      context,
+      range: _range,
+      sectors: widget.beachSectors,
+      bookings: all,
+      onChoose: (umbrella, clientName) => _openForm(umbrella, null, all, initialRange: _range, initialClientName: clientName),
+    );
+  }
+
   // ---------- Azioni sulle prenotazioni ----------
 
-  Future<void> _openForm(Umbrella umbrella, Booking? existing, List<Booking> all, {DateTimeRange? initialRange}) async {
+  Future<void> _openForm(Umbrella umbrella, Booking? existing, List<Booking> all,
+      {DateTimeRange? initialRange, String? initialClientName}) async {
     final result = await showBookingForm(
       context,
       umbrella: umbrella,
@@ -108,6 +131,7 @@ class _MapScreenState extends State<MapScreen> {
       knownClients: knownClients(all),
       allBookings: all,
       firstDate: _repo.windowStart,
+      initialClientName: initialClientName,
     );
     if (result == null || !mounted) return;
     switch (result.action) {
@@ -215,6 +239,11 @@ class _MapScreenState extends State<MapScreen> {
               ]
             : [
                 IconButton(
+                  icon: Icon(Icons.lightbulb_outline, color: Colors.amber.shade800),
+                  tooltip: 'Dove la metto? (suggerimenti)',
+                  onPressed: _openSuggestions,
+                ),
+                IconButton(
                   icon: const Icon(Icons.date_range),
                   tooltip: 'Planner',
                   onPressed: () => Navigator.push(
@@ -254,6 +283,12 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 }
                 _openHighlightIfNeeded(bookings);
+                if (widget.openSuggestions && !_suggestionsShown) {
+                  _suggestionsShown = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _openSuggestions();
+                  });
+                }
                 return InteractiveViewer(
                   minScale: 0.5,
                   maxScale: 5.0,
@@ -355,6 +390,14 @@ class _MapScreenState extends State<MapScreen> {
           const SizedBox(width: 4),
           const Text('Arrivato', style: TextStyle(fontSize: 12)),
         ]),
+        InkWell(
+          onTap: () => HelpScreen.open(context, HelpTopic.mappa),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.help_outline, size: 16, color: Colors.green.shade800),
+            const SizedBox(width: 2),
+            Text('Guida', style: TextStyle(fontSize: 12, color: Colors.green.shade800, fontWeight: FontWeight.bold)),
+          ]),
+        ),
       ]),
     );
   }

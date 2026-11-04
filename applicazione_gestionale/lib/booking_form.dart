@@ -39,6 +39,7 @@ Future<BookingFormResult?> showBookingForm(
   Map<String, String> knownClients = const {},
   List<Booking> allBookings = const [],
   DateTime? firstDate,
+  String? initialClientName,
 }) {
   return showDialog<BookingFormResult>(
     context: context,
@@ -50,6 +51,7 @@ Future<BookingFormResult?> showBookingForm(
       knownClients: knownClients,
       allBookings: allBookings,
       firstDate: firstDate,
+      initialClientName: initialClientName,
     ),
   );
 }
@@ -64,6 +66,9 @@ class BookingFormDialog extends StatefulWidget {
   final List<Booking> allBookings;
   final DateTime? firstDate;
 
+  /// Nome già scritto (es. dal suggeritore) per una nuova prenotazione.
+  final String? initialClientName;
+
   const BookingFormDialog({
     super.key,
     required this.umbrella,
@@ -72,6 +77,7 @@ class BookingFormDialog extends StatefulWidget {
     this.knownClients = const {},
     this.allBookings = const [],
     this.firstDate,
+    this.initialClientName,
   });
 
   @override
@@ -102,8 +108,11 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
   void initState() {
     super.initState();
     final b = _existing;
-    _name = TextEditingController(text: b?.clientName ?? '');
-    _phone = TextEditingController(text: b?.phone ?? '');
+    final initialName = b?.clientName ?? widget.initialClientName?.trim() ?? '';
+    _name = TextEditingController(text: initialName);
+    // Cliente già visto: si ripropone il suo telefono.
+    final knownPhone = widget.knownClients.entries.where((e) => e.key.toLowerCase() == initialName.toLowerCase()).firstOrNull?.value;
+    _phone = TextEditingController(text: b?.phone ?? knownPhone ?? '');
     _notes = TextEditingController(text: b?.notes ?? '');
     _price = TextEditingController(text: b?.price == null ? '' : _amountText(b!.price!));
     _deposit = TextEditingController(text: (b?.deposit ?? 0) > 0 ? _amountText(b!.deposit) : '');

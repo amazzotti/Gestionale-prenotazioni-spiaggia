@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'availability.dart';
 import 'booking_repository.dart';
 import 'booking_service.dart';
+import 'help_screen.dart';
 import 'models.dart';
 
 /// Occupazione del giorno per settore, incassi della stagione e chi deve ancora pagare.
@@ -43,7 +44,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Incassi e Statistiche'), backgroundColor: Colors.green),
+      appBar: AppBar(title: const Text('Incassi e Statistiche'), backgroundColor: Colors.green, actions: const [HelpButton(HelpTopic.incassi)]),
       body: ValueListenableBuilder<List<Booking>?>(
         valueListenable: BookingRepository.instance.bookings,
         builder: (context, bookings, _) {

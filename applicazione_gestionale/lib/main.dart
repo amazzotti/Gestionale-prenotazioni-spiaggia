@@ -11,6 +11,7 @@ import 'availability.dart';
 import 'beach_editor_screen.dart';
 import 'booking_repository.dart';
 import 'devices_screen.dart';
+import 'help_screen.dart';
 import 'layout_repository.dart';
 import 'map_screen.dart';
 import 'planner_screen.dart';
@@ -142,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
       locale: const Locale('it', 'IT'),
     );
     if (selectedRange != null && context.mounted) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors)));
+      Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen(filterDateRange: selectedRange, beachSectors: _beachSectors, openSuggestions: true)));
     }
   }
 
@@ -256,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.green,
         actions: [
           IconButton(icon: const Icon(Icons.search), onPressed: () => _showSearch(context), tooltip: 'Cerca Prenotazione'),
+          IconButton(icon: const Icon(Icons.help_outline), tooltip: 'Guida', onPressed: () => HelpScreen.open(context)),
         ],
       ),
       body: _isLoading

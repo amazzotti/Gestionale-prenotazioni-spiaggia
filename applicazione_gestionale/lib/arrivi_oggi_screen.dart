@@ -5,6 +5,7 @@ import 'availability.dart';
 import 'booking_repository.dart';
 import 'booking_service.dart';
 import 'contact.dart';
+import 'help_screen.dart';
 import 'models.dart';
 
 /// Arrivi e partenze di un giorno (di default oggi).
@@ -138,6 +139,7 @@ class _ArriviOggiScreenState extends State<ArriviOggiScreen> with SingleTickerPr
         ),
         actions: [
           IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pickDate, tooltip: 'Seleziona Data'),
+          const HelpButton(HelpTopic.arrivi),
         ],
       ),
       body: Column(
