@@ -4,12 +4,14 @@ import 'package:intl/intl.dart';
 import 'models.dart';
 import 'suggester.dart';
 
-/// Pannello "Dove la metto?": consiglia gli ombrelloni migliori per il periodo.
+/// Pannello "Dove la metto?": consiglia gli ombrelloni migliori per il periodo,
+/// SEMPRE separati per settore (Mare, Tende, Dietro): i settori non si mescolano mai.
 Future<void> showSuggestionsSheet(
   BuildContext context, {
   required DateTimeRange range,
   required List<BeachSector> sectors,
   required List<Booking> bookings,
+  String? initialSector,
   required void Function(Umbrella umbrella, String clientName) onChoose,
 }) {
   return showModalBottomSheet(
@@ -22,6 +24,7 @@ Future<void> showSuggestionsSheet(
         range: range,
         sectors: sectors,
         bookings: bookings,
+        initialSector: initialSector,
         onChoose: (u, name) {
           Navigator.pop(sheetContext);
           onChoose(u, name);
@@ -35,9 +38,17 @@ class SuggestionsPanel extends StatefulWidget {
   final DateTimeRange range;
   final List<BeachSector> sectors;
   final List<Booking> bookings;
+  final String? initialSector;
   final void Function(Umbrella umbrella, String clientName) onChoose;
 
-  const SuggestionsPanel({super.key, required this.range, required this.sectors, required this.bookings, required this.onChoose});
+  const SuggestionsPanel({
+    super.key,
+    required this.range,
+    required this.sectors,
+    required this.bookings,
+    this.initialSector,
+    required this.onChoose,
+  });
 
   @override
   State<SuggestionsPanel> createState() => _SuggestionsPanelState();
@@ -45,12 +56,15 @@ class SuggestionsPanel extends StatefulWidget {
 
 class _SuggestionsPanelState extends State<SuggestionsPanel> {
   static final _fmt = DateFormat('dd/MM');
+
+  /// Settore scelto (null = tutti, ma mostrati separati).
   String? _sector;
   final _client = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _sector = widget.initialSector;
     _client.addListener(() => setState(() {}));
   }
 
@@ -60,23 +74,18 @@ class _SuggestionsPanelState extends State<SuggestionsPanel> {
     super.dispose();
   }
 
-  List<UmbrellaSuggestion> _suggest(String? sector) => suggestUmbrellas(
-        range: widget.range,
-        sectors: widget.sectors,
-        bookings: widget.bookings,
-        sectorName: sector,
-        clientName: _client.text,
-      );
-
   @override
   Widget build(BuildContext context) {
-    var list = _suggest(_sector);
-    String? note;
-    if (list.isEmpty && _sector != null) {
-      list = _suggest(null);
-      note = list.isEmpty ? null : 'Nessun posto libero in $_sector per queste date. Ecco gli altri settori:';
-    }
     final days = widget.range.end.difference(widget.range.start).inDays + 1;
+    final sectors = BeachSector.sorted(widget.sectors);
+    final shown = _sector == null ? sectors : sectors.where((s) => s.name == _sector).toList();
+    final groups = suggestBySector(
+      range: widget.range,
+      sectors: shown,
+      bookings: widget.bookings,
+      clientName: _client.text,
+      perSector: _sector == null ? 3 : 6,
+    );
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
@@ -94,8 +103,8 @@ class _SuggestionsPanelState extends State<SuggestionsPanel> {
               style: TextStyle(color: Colors.grey.shade700)),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 4, children: [
-            ChoiceChip(label: const Text('Tutti'), selected: _sector == null, onSelected: (_) => setState(() => _sector = null)),
-            for (final s in BeachSector.sorted(widget.sectors))
+            ChoiceChip(label: const Text('Tutti i settori'), selected: _sector == null, onSelected: (_) => setState(() => _sector = null)),
+            for (final s in sectors)
               ChoiceChip(label: Text(s.name), selected: _sector == s.name, onSelected: (_) => setState(() => _sector = s.name)),
           ]),
           const SizedBox(height: 8),
@@ -109,19 +118,25 @@ class _SuggestionsPanelState extends State<SuggestionsPanel> {
               isDense: true,
             ),
           ),
-          const SizedBox(height: 12),
-          if (note != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(note, style: TextStyle(color: Colors.orange.shade900))),
-          if (list.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text('Nessun ombrellone libero per tutto il periodo. Prova a cambiare le date o a dividere la prenotazione.',
-                  textAlign: TextAlign.center),
+          for (final (sector, list) in groups) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 16, 2, 6),
+              child: Text(sector.name.toUpperCase(),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1, color: Colors.green.shade900)),
             ),
-          for (var i = 0; i < list.length; i++) _card(list[i], best: i == 0),
-          const SizedBox(height: 8),
+            if (list.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 2, bottom: 4),
+                child: Text('Nessun posto libero in ${sector.name} per tutto il periodo.',
+                    style: TextStyle(color: Colors.grey.shade700, fontStyle: FontStyle.italic)),
+              ),
+            for (var i = 0; i < list.length; i++) _card(list[i], best: i == 0),
+          ],
+          const SizedBox(height: 12),
           Text(
-            'Come scelgo: prima l\'ombrellone abituale del cliente, poi quelli dove la prenotazione si incastra tra due clienti '
-            'senza lasciare giorni scomodi. Gli ombrelloni completamente liberi restano per chi si ferma di più.',
+            'Come scelgo, settore per settore: prima l\'ombrellone abituale del cliente, poi quelli dove la prenotazione '
+            'si incastra tra due clienti senza lasciare giorni scomodi. Gli ombrelloni completamente liberi restano per '
+            'chi si ferma di più.',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],

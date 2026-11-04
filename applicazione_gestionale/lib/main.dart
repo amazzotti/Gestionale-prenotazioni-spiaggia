@@ -220,28 +220,36 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, bookings, _) {
         if (bookings == null || _beachSectors.isEmpty) return const SizedBox(height: 8);
         final today = BookingRepository.instance.today;
+        // Tutto separato per settore: occupati, arrivi e partenze di Mare, Tende e Dietro.
         final occupancy = occupancyOn(today, _beachSectors, bookings);
-        final total = occupancy.fold<int>(0, (s, o) => s + o.total);
-        final occupied = occupancy.fold<int>(0, (s, o) => s + o.occupied);
-        Widget tile(String value, String label, IconData icon) => Expanded(
-              child: Column(children: [
-                Icon(icon, color: Colors.green.shade800),
-                Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green.shade900)),
-                Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
-              ]),
-            );
+        final arrivals = arrivalsOn(today, bookings);
+        final departures = departuresOn(today, bookings);
+        final headerStyle = TextStyle(fontSize: 12, color: Colors.grey.shade700);
+        final valueStyle = TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade900);
+        Widget cell(Widget child, {int flex = 1}) => Expanded(flex: flex, child: Center(child: child));
         return Card(
           color: Colors.white.withValues(alpha: 0.9),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
             child: Column(children: [
               Text('Oggi, ${DateFormat('EEEE d MMMM', 'it').format(today)}', style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Row(children: [
-                tile('$occupied/$total', 'ombrelloni occupati', Icons.beach_access),
-                tile('${arrivalsOn(today, bookings).length}', 'arrivi', Icons.login),
-                tile('${departuresOn(today, bookings).length}', 'partenze', Icons.logout),
+                const Expanded(flex: 2, child: SizedBox()),
+                cell(Text('occupati', style: headerStyle)),
+                cell(Text('arrivi', style: headerStyle)),
+                cell(Text('partenze', style: headerStyle)),
               ]),
+              for (final o in occupancy)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Expanded(flex: 2, child: Text(o.sector, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                    cell(Text('${o.occupied}/${o.total}', style: valueStyle)),
+                    cell(Text('${arrivals.where((b) => b.sectorName == o.sector).length}', style: valueStyle)),
+                    cell(Text('${departures.where((b) => b.sectorName == o.sector).length}', style: valueStyle)),
+                  ]),
+                ),
             ]),
           ),
         );

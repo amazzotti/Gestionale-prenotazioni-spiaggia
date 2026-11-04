@@ -31,8 +31,11 @@ Prima le prenotazioni stavano su carta e su un programma per PC. Serviva qualcos
   Pressione lunga su un ombrellone: chi c'era **prima**, chi c'è **nel periodo**, chi arriva **dopo**.
 - **Planner a calendario**: una riga per ombrellone e una colonna per giorno, per 4 settimane, con le prenotazioni come barre. Per
   spostarne una si tocca la barra e poi la riga di destinazione; le righe libere diventano verdi.
-- **Suggeritore "Dove la metto?"**: consiglia l'ombrellone migliore per le date scelte. Prima quello abituale del
-  cliente, poi l'incastro migliore tra due prenotazioni, così gli ombrelloni liberi restano per chi si ferma di più.
+- **Settori sempre separati**: Mare, Tende e Dietro hanno ognuno i propri riepiloghi, suggerimenti, arrivi e incassi;
+  spostare una prenotazione in un altro settore richiede una conferma.
+- **Suggeritore "Dove la metto?"**: consiglia l'ombrellone migliore per le date scelte, con una classifica per ogni
+  settore. Prima quello abituale del cliente, poi l'incastro migliore tra due prenotazioni, così gli ombrelloni liberi
+  restano per chi si ferma di più.
 - **Scheda prenotazione**: completamento automatico dei clienti, **Chiama** e **WhatsApp** con il riepilogo già scritto,
   prezzo / acconto / saldato, riquadro prima/dopo, sposta e allunga su un altro ombrellone.
 - **Nessuna doppia prenotazione**: prima di salvare, l'app ricontrolla sul server che l'ombrellone sia libero.

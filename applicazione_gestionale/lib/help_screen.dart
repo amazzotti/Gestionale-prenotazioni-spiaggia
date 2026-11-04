@@ -15,7 +15,8 @@ class _Topic {
 
 const _topics = <_Topic>[
   _Topic(HelpTopic.inizio, Icons.home_outlined, 'Per iniziare', [
-    'In alto nella home vedi il riepilogo di oggi: ombrelloni occupati, arrivi e partenze.',
+    'I tre settori, Mare, Tende e Dietro, sono sempre tenuti separati: riepiloghi, suggerimenti, arrivi e incassi sono divisi per settore.',
+    'In alto nella home vedi il riepilogo di oggi per ogni settore: ombrelloni occupati, arrivi e partenze.',
     '"Nuova Prenotazione": scegli le date, poi l\'app ti consiglia dove metterla.',
     '"Mappa di Oggi" e "Planner" ti fanno vedere la spiaggia; "Cerca" trova un cliente per nome, telefono o numero di ombrellone.',
     'In fondo alla home c\'è la versione dell\'app (es. V1.0.0).',
@@ -35,13 +36,15 @@ const _topics = <_Topic>[
     'Il riquadro Prima / Dopo ti dice chi c\'è su quell\'ombrellone prima e dopo le date scelte.',
     'Prezzo, acconto e "Saldato": l\'app calcola quanto resta da incassare.',
     'Il tasto arancione SPOSTA porta la prenotazione su un altro ombrellone; "Allunga altrove" compare se i giorni in più sono occupati.',
+    'Se sposti in un altro settore (per esempio da Tende a Mare) l\'app chiede conferma, perché i prezzi possono essere diversi.',
     'Il cestino elimina dopo una conferma; per qualche secondo puoi premere ANNULLA.',
     'L\'app non salva mai due prenotazioni sullo stesso ombrellone negli stessi giorni.',
   ]),
   _Topic(HelpTopic.suggeritore, Icons.lightbulb_outline, 'Il suggeritore "Dove la metto?"', [
     'Si apre da solo dopo "Nuova Prenotazione", oppure con la lampadina in alto nella mappa.',
-    'Puoi scegliere il settore e scrivere il nome del cliente.',
-    'Prima propone l\'ombrellone che il cliente ha già avuto, poi quelli dove la prenotazione si incastra tra due clienti senza lasciare giorni scomodi.',
+    'I consigli sono divisi per settore: Mare, Tende e Dietro hanno ognuno la sua classifica. Tocca un settore per vedere solo quello.',
+    'Se un settore è pieno te lo dice, ma non ti propone mai da solo un altro settore.',
+    'Dentro ogni settore propone prima l\'ombrellone che il cliente ha già avuto, poi quelli dove la prenotazione si incastra tra due clienti senza lasciare giorni scomodi.',
     'Gli ombrelloni liberi tutta la stagione li tiene per ultimi, per chi si ferma di più.',
     'Tocca PRENOTA QUI e la scheda si apre già compilata.',
   ]),
@@ -49,18 +52,19 @@ const _topics = <_Topic>[
     'Una riga per ombrellone, una colonna per giorno: il quadro di 4 settimane in un colpo d\'occhio.',
     'Barre rosse = prenotazioni nel periodo scelto, barre grigie = prima e dopo.',
     'Tocco su una barra per aprirla, tocco su uno spazio vuoto per prenotare da quel giorno.',
-    'Per spostare: tocca la barra, poi SPOSTA, poi la riga di destinazione. Le righe verdi sono quelle libere per quelle date.',
+    'Le righe sono divise per settore: Mare, poi Tende, poi Dietro. In alto puoi scegliere di vedere un solo settore.',
+    'Per spostare: tocca la barra, poi SPOSTA, poi la riga di destinazione. Le righe verdi sono quelle libere per quelle date nello stesso settore; per un altro settore l\'app chiede conferma.',
     'Le frecce cambiano settimana; trascina col dito per scorrere.',
   ]),
   _Topic(HelpTopic.arrivi, Icons.people_outline, 'Arrivi e partenze', [
-    'Chi arriva e chi parte nel giorno scelto (di default oggi).',
+    'Chi arriva e chi parte nel giorno scelto (di default oggi), diviso per settore.',
     'Spunta la casella quando il cliente arriva: sulla mappa compare il bollino verde.',
     'Tocca "Da incassare" per segnare il pagamento come saldato.',
   ]),
   _Topic(HelpTopic.incassi, Icons.bar_chart, 'Incassi e statistiche', [
     'Occupazione del giorno per settore, con le frecce per cambiare giorno.',
-    'Totale incassato e da incassare della stagione.',
-    'Elenco di chi deve ancora pagare: tocca l\'importo per segnarlo come saldato.',
+    'Totale incassato e da incassare della stagione, e lo stesso diviso per settore.',
+    'Elenco di chi deve ancora pagare, diviso per settore: tocca l\'importo per segnarlo come saldato.',
   ]),
   _Topic(HelpTopic.telefoni, Icons.smartphone, 'Telefoni e sicurezza', [
     'Non serve nessuna password: ogni telefono va approvato una volta sola.',

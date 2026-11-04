@@ -7,6 +7,7 @@ import 'booking_repository.dart';
 import 'booking_service.dart';
 import 'help_screen.dart';
 import 'models.dart';
+import 'sector_guard.dart';
 
 /// Planner a calendario: una riga per ombrellone, una colonna per giorno.
 ///
@@ -208,6 +209,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
       return;
     }
     final range = _movingRange ?? b.range;
+    if (!await confirmSectorChange(context, b, target, extension: _isExtension)) return;
     try {
       if (_isExtension) {
         await _service.createExtension(b, target.id, range);
@@ -230,6 +232,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   bool _fitsMoving(Umbrella u, List<Booking> all) {
     final b = _moving!;
     if (!_isExtension && u.id == b.umbrellaId) return false; // è già lì
+    if (u.sectorName != b.sectorName) return false; // si propone solo lo stesso settore
     final range = _movingRange ?? b.range;
     final candidate = Booking(
       id: _isExtension ? '' : b.id,
@@ -356,7 +359,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
       child: Column(children: [
         Text('${_isExtension ? 'ALLUNGA' : 'SPOSTA'}: ${b.clientName} · dal ${_shortFmt.format(range.start)} al ${_shortFmt.format(range.end)}',
             textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const Text('Tocca la riga di un ombrellone verde (libero per queste date)', textAlign: TextAlign.center, style: TextStyle(fontSize: 13)),
+        const Text('Tocca la riga di un ombrellone verde: libero per queste date, stesso settore', textAlign: TextAlign.center, style: TextStyle(fontSize: 13)),
       ]),
     );
   }

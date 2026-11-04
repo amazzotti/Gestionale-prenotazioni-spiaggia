@@ -9,6 +9,7 @@ import 'package:applicazione_gestionale/booking_repository.dart';
 import 'package:applicazione_gestionale/booking_service.dart';
 import 'package:applicazione_gestionale/help_screen.dart';
 import 'package:applicazione_gestionale/map_screen.dart';
+import 'package:applicazione_gestionale/suggestions_sheet.dart';
 
 Widget app(Widget home) => MaterialApp(
       locale: const Locale('it', 'IT'),
@@ -31,6 +32,9 @@ final sectors = [
 ];
 
 DateTime d(int day) => DateTime(2027, 7, day);
+
+/// Testo dentro il pannello dei suggerimenti (la mappa dietro ha anche la scritta MARE).
+Finder inPanel(String text) => find.descendant(of: find.byType(SuggestionsPanel), matching: find.text(text));
 
 void main() {
   late BookingRepository repo;
@@ -72,7 +76,14 @@ void main() {
     await tester.pump();
     expect(find.text('Ferri Anna ha già avuto questo ombrellone'), findsOneWidget);
 
-    await tester.tap(find.text('PRENOTA QUI').first);
+    // i settori restano separati: l'ombrellone abituale è in cima alla sezione DIETRO
+    expect(inPanel('MARE'), findsOneWidget);
+    expect(inPanel('DIETRO'), findsOneWidget);
+    final dietroCard = find.ancestor(of: find.text('Ombrellone 1 · Dietro'), matching: find.byType(Card));
+    final button = find.descendant(of: dietroCard, matching: find.text('PRENOTA QUI'));
+    await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
+    await tester.tap(button);
     await tester.pumpAndSettle();
     expect(find.text('Ombrellone 1'), findsOneWidget);
     expect(find.text('Settore: Dietro'), findsOneWidget, reason: 'l\'ombrellone abituale di Ferri Anna è il Dietro 1');
@@ -89,7 +100,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, 'Dietro'));
     await tester.pump();
-    expect(find.text('Nessun posto libero in Dietro per queste date. Ecco gli altri settori:'), findsOneWidget);
+    expect(find.text('Nessun posto libero in Dietro per tutto il periodo.'), findsOneWidget);
+    expect(find.text('Ombrellone 1 · Mare'), findsNothing, reason: 'non propone mai un altro settore da solo');
+    expect(inPanel('MARE'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Tutti i settori'));
+    await tester.pump();
+    expect(inPanel('MARE'), findsOneWidget);
     expect(find.text('Ombrellone 1 · Mare'), findsOneWidget);
   });
 

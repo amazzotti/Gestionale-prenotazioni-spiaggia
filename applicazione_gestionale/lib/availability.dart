@@ -232,3 +232,35 @@ String bookingSummaryMessage(Booking b, {String beachName = 'Bagni Carla 98'}) {
 
 /// Numero del prossimo ombrellone nell'editor: il più alto già usato + 1 (come nella versione originale).
 int nextUmbrellaNumber(Iterable<int> used) => used.fold(0, (max, n) => n > max ? n : max) + 1;
+
+// ---------- Tutto diviso per settore (Mare, Tende, Dietro) ----------
+
+/// Raggruppa le prenotazioni per settore, nell'ordine della mappa (Mare, Tende, Dietro).
+/// Mantiene l'ordine delle prenotazioni dentro ogni settore.
+List<(String, List<Booking>)> groupBySector(Iterable<Booking> list, List<BeachSector> sectors) {
+  final order = BeachSector.sorted(sectors).map((s) => s.name).toList();
+  final groups = <String, List<Booking>>{};
+  for (final b in list) {
+    groups.putIfAbsent(b.sectorName, () => []).add(b);
+  }
+  // Ordine: quello della mappa; senza mappa, l'ordine fisso Mare, Tende, Dietro.
+  int rank(String name) {
+    final i = order.indexOf(name);
+    return i >= 0 ? i : 100 + (BeachSector.sectorOrder[name] ?? 99);
+  }
+
+  final names = groups.keys.toList()..sort((a, b) => rank(a) != rank(b) ? rank(a).compareTo(rank(b)) : a.compareTo(b));
+  return [for (final n in names) (n, groups[n]!)];
+}
+
+/// Incassi di un settore.
+class SectorMoney {
+  final String sector;
+  final MoneySummary money;
+  const SectorMoney(this.sector, this.money);
+}
+
+/// Incassato e da incassare, separati per settore.
+List<SectorMoney> moneyBySector(List<BeachSector> sectors, Iterable<Booking> all) => [
+      for (final s in BeachSector.sorted(sectors)) SectorMoney(s.name, moneySummary(all.where((b) => b.sectorName == s.name))),
+    ];

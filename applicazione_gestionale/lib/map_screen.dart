@@ -8,6 +8,7 @@ import 'booking_service.dart';
 import 'models.dart';
 import 'help_screen.dart';
 import 'planner_screen.dart';
+import 'sector_guard.dart';
 import 'suggestions_sheet.dart';
 import 'umbrella_timeline_view.dart';
 
@@ -115,6 +116,7 @@ class _MapScreenState extends State<MapScreen> {
       range: _range,
       sectors: widget.beachSectors,
       bookings: all,
+      initialSector: _selectedSectorName,
       onChoose: (umbrella, clientName) => _openForm(umbrella, null, all, initialRange: _range, initialClientName: clientName),
     );
   }
@@ -183,6 +185,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _moveBookingTo(Umbrella target) async {
     final booking = _bookingToMove!;
     final range = _moveRange ?? booking.range;
+    if (!await confirmSectorChange(context, booking, target)) return;
     try {
       await _service.move(booking, target.id, range);
       setState(() {
@@ -200,6 +203,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _createExtensionOn(Umbrella target) async {
+    if (!await confirmSectorChange(context, _extendOriginal!, target, extension: true)) return;
     try {
       await _service.createExtension(_extendOriginal!, target.id, _extraDaysRange!);
       setState(() {

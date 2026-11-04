@@ -232,3 +232,4 @@ void main() {
     expect(nextUmbrellaNumber({1, 2, 4, 5}), 6);
   });
 }
+

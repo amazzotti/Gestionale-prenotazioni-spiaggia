@@ -153,4 +153,42 @@ void main() {
     expect(find.text('Da Spostare spostato sull\'ombrellone T1-3.'), findsOneWidget);
     expect(find.text('Planner'), findsOneWidget, reason: 'esce dalla modalità sposta');
   });
+
+  testWidgets('spostare in un altro settore chiede conferma', (tester) async {
+    await useBigScreen(tester);
+    final twoSectors = [
+      ...sectors,
+      BeachSector(name: 'Mare', crossAxisCount: 1, rows: 1, umbrellas: [Umbrella(id: 'Mare-90', sectorName: 'Mare', index: 0)]),
+    ];
+    await setBookings(tester, [
+      Booking(id: 'mv', umbrellaId: 'Tende-T1-1', clientName: 'Cambia Settore', startDate: d(7, 10), endDate: d(7, 12)),
+    ]);
+    await tester.pumpWidget(app(PlannerScreen(beachSectors: twoSectors, highlightRange: highlight)));
+    await tester.pump();
+    await tester.tap(find.text('Cambia Settore'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('SPOSTA SU ALTRO OMBRELLONE'));
+    await tester.pumpAndSettle();
+
+    // NO: resta dov'è
+    await tester.tapAt(rowPoint(tester, '90', 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Cambiare settore?'), findsOneWidget);
+    expect(find.textContaining('è nel settore Tende'), findsOneWidget);
+    await tester.tap(find.text('NO'));
+    await tester.pumpAndSettle();
+    final still = await tester.runAsync(() => db.collection('bookings').doc('mv').get());
+    expect(still!.data()!['umbrellaId'], 'Tende-T1-1');
+
+    // SÌ: spostato in Mare
+    await tester.tapAt(rowPoint(tester, '90', 0));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('SÌ, IN MARE'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    final moved = await tester.runAsync(() => db.collection('bookings').doc('mv').get());
+    expect(moved!.data()!['umbrellaId'], 'Mare-90');
+  });
 }

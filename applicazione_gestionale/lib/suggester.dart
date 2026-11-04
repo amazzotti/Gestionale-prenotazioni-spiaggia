@@ -92,3 +92,19 @@ List<UmbrellaSuggestion> suggestUmbrellas({
   });
   return result.take(limit).map((e) => e.$1).toList();
 }
+
+/// Suggerimenti separati per settore, nell'ordine della mappa (Mare, Tende, Dietro).
+/// Ogni settore ha la sua classifica: i settori non vengono mai mescolati.
+List<(BeachSector, List<UmbrellaSuggestion>)> suggestBySector({
+  required DateTimeRange range,
+  required List<BeachSector> sectors,
+  required Iterable<Booking> bookings,
+  String? clientName,
+  int perSector = 3,
+}) {
+  final all = bookings.toList();
+  return [
+    for (final s in BeachSector.sorted(sectors))
+      (s, suggestUmbrellas(range: range, sectors: [s], bookings: all, sectorName: s.name, clientName: clientName, limit: perSector)),
+  ];
+}

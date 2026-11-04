@@ -223,8 +223,10 @@ void main() {
 
     expect(find.text('Totale: 2 su 3'), findsOneWidget);
     expect(find.text('Mare: 2 su 3 (67%)'), findsOneWidget);
-    expect(find.text('€ 100'), findsOneWidget); // incassato: 40 + 60
-    expect(find.text('€ 60'), findsNWidgets(2)); // da incassare (riquadro + riga)
+    expect(find.text('€ 100'), findsNWidgets(2)); // incassato 40 + 60: totale e riga "Mare"
+    expect(find.text('€ 60'), findsNWidgets(3)); // da incassare: totale, riga "Mare", elenco
+    expect(find.text('Per settore'), findsOneWidget);
+    expect(find.text('MARE'), findsOneWidget, reason: 'elenco da incassare diviso per settore');
     expect(find.text('Uno - Ombr. 1'), findsOneWidget);
   });
 }
