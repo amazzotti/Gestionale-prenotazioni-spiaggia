@@ -1,90 +1,108 @@
-# Prenotazioni-spiaggia
+# 🏖️ Gestionale prenotazioni spiaggia
 
 [![CI](https://github.com/amazzotti/Gestionale-prenotazioni-spiaggia/actions/workflows/ci.yml/badge.svg)](https://github.com/amazzotti/Gestionale-prenotazioni-spiaggia/actions/workflows/ci.yml)
+![Flutter](https://img.shields.io/badge/Flutter-3.35-02569B?logo=flutter)
+![Firebase](https://img.shields.io/badge/Firebase-Firestore-FFCA28?logo=firebase)
 
-Gestionale per le prenotazioni di ombrelloni e tende dello stabilimento Bagni Carla 98 (Riccione).
-Lo usa il personale dello stabilimento da telefono Android.
+App Android per gestire le prenotazioni di ombrelloni e tende di uno stabilimento balneare di famiglia,
+**Bagni Carla 98** a Riccione. La usiamo ogni giorno della stagione, dal telefono, in famiglia.
 
-App Flutter (`applicazione_gestionale/`) con Firebase Authentication e Cloud Firestore.
+| Mappa di oggi | Planner | Suggeritore |
+|---|---|---|
+| ![Mappa di oggi](screenshots/02_mappa_oggi.png) | ![Planner](screenshots/11_planner.png) | ![Suggeritore](screenshots/13_suggeritore.png) |
 
-## Anteprime
+> 🇬🇧 *Flutter + Firebase app that runs the umbrella bookings of my family's beach club in Riccione (Italy):
+> live beach map, calendar planner with drag-free moves, a "where should I put it?" suggester, payments,
+> arrivals and statistics. Passwordless device approval, Firestore security rules with data validation,
+> 100+ automated tests and CI on GitHub Actions.*
+
+## Perché l'ho fatta
+
+Prima le prenotazioni stavano su carta e su un programma per PC. Serviva qualcosa che:
+- funzionasse **dal telefono**, in spiaggia, per tutta la famiglia, con i dati sempre aggiornati;
+- facesse vedere **in un colpo d'occhio** chi c'è, chi arriva e dove c'è posto;
+- fosse **semplice** anche per chi non è pratico di tecnologia (niente password, guida integrata);
+- costasse **zero**: tutto gira sul piano gratuito di Firebase.
+
+## Cosa fa
+
+- **Mappa della spiaggia** per settori (Mare, Tende, Dietro), costruita con un editor: verde libero, rosso occupato,
+  periodo della prenotazione sul quadrato, bollini **€** (da incassare) e **✓** (arrivato).
+  Pressione lunga su un ombrellone: chi c'era **prima**, chi c'è **nel periodo**, chi arriva **dopo**.
+- **Planner a calendario**: una riga per ombrellone e una colonna per giorno, per 4 settimane, con le prenotazioni come barre. Per
+  spostarne una si tocca la barra e poi la riga di destinazione; le righe libere diventano verdi.
+- **Suggeritore "Dove la metto?"**: consiglia l'ombrellone migliore per le date scelte. Prima quello abituale del
+  cliente, poi l'incastro migliore tra due prenotazioni, così gli ombrelloni liberi restano per chi si ferma di più.
+- **Scheda prenotazione**: completamento automatico dei clienti, **Chiama** e **WhatsApp** con il riepilogo già scritto,
+  prezzo / acconto / saldato, riquadro prima/dopo, sposta e allunga su un altro ombrellone.
+- **Nessuna doppia prenotazione**: prima di salvare, l'app ricontrolla sul server che l'ombrellone sia libero.
+- **Arrivi e partenze**, **incassi e statistiche** (occupazione per settore, chi deve ancora pagare), **ricerca** per nome,
+  telefono o numero di ombrellone, eliminazione con **Annulla**.
+- **Guida "?"** integrata in ogni schermata e **versione** visibile (es. V1.0.0).
+
+## Come è fatta
+
+| Parte | Tecnologia |
+|---|---|
+| App | Flutter (Dart), Material 3, pensata per lo schermo del telefono |
+| Dati in tempo reale | Cloud Firestore, un solo listener condiviso per restare nel piano gratuito |
+| Accesso | Firebase Auth anonimo + **approvazione dei telefoni** (nessuna password) |
+| Sicurezza | [Regole Firestore](firestore.rules): solo telefoni approvati, validazione di campi, tipi e date |
+| Qualità | Logica separata dall'interfaccia, **100+ test** (logica, Firestore simulato, schermate), test delle regole sull'emulatore |
+| Automazione | GitHub Actions (analisi + test a ogni push), script di rilascio con versione automatica |
+
+| File | Cosa contiene |
+|---|---|
+| `lib/models.dart` | Prenotazione, ombrellone, settore |
+| `lib/availability.dart` | Logica pura: disponibilità, conflitti, prima/dopo, arrivi, ricerca, statistiche |
+| `lib/suggester.dart` | Il suggeritore "Dove la metto?" |
+| `lib/booking_repository.dart` | Lettura delle prenotazioni (un solo listener) e migrazione dei dati vecchi |
+| `lib/booking_service.dart` | Scritture: validazione, controllo conflitti sul server, chi ha modificato |
+| `lib/device_service.dart`, `lib/auth_gate.dart` | Accesso senza login: approvazione dei telefoni |
+| `lib/*_screen.dart`, `lib/booking_form.dart` | Schermate |
+| `firestore.rules`, `firestore-tests/` | Regole di sicurezza e relativi test |
+
+## Privacy
+
+Nel repository **non ci sono dati di clienti**: nomi e numeri nelle anteprime sono inventati. I dati reali stanno solo su
+Firebase e li vedono solo i telefoni approvati. La configurazione Firebase (`google-services.json`) identifica il
+progetto ma non dà accesso ai dati: l'accesso è deciso dalle regole di sicurezza.
+
+## Tutte le anteprime
 
 | Home | Mappa di oggi | Mappa di un periodo |
 |---|---|---|
 | ![Home](screenshots/01_home.png) | ![Mappa di oggi](screenshots/02_mappa_oggi.png) | ![Mappa periodo](screenshots/03_mappa_periodo.png) |
 
-| Scheda prenotazione | Prenotazioni di un ombrellone | Annulla eliminazione |
+| Scheda prenotazione | Prima / nel periodo / dopo | Annulla eliminazione |
 |---|---|---|
-| ![Scheda](screenshots/04_scheda_prenotazione.png) | ![Elenco](screenshots/05_elenco_ombrellone.png) | ![Annulla](screenshots/06_annulla_eliminazione.png) |
+| ![Scheda](screenshots/04_scheda_prenotazione.png) | ![Prima e dopo](screenshots/05_elenco_ombrellone.png) | ![Annulla](screenshots/06_annulla_eliminazione.png) |
 
 | Arrivi e partenze | Incassi e statistiche | Telefono nuovo |
 |---|---|---|
 | ![Arrivi](screenshots/07_arrivi.png) | ![Statistiche](screenshots/08_statistiche.png) | ![Telefono in attesa](screenshots/09_attesa_approvazione.png) |
 
-| Telefoni (approvazione) | Planner | Planner: sposta |
+| Telefoni (approvazione) | Planner: sposta | Guida |
 |---|---|---|
-| ![Telefoni](screenshots/10_telefoni.png) | ![Planner](screenshots/11_planner.png) | ![Planner sposta](screenshots/12_planner_sposta.png) |
+| ![Telefoni](screenshots/10_telefoni.png) | ![Planner sposta](screenshots/12_planner_sposta.png) | ![Guida](screenshots/14_guida.png) |
 
-Le anteprime (dati di esempio, formato telefono) si rigenerano con:
-`cd applicazione_gestionale` e poi `flutter test screenshots_test --update-goldens`.
-
-## Funzioni
-
-- **Mappa della spiaggia** per settori (Mare, Tende, Dietro), con passerelle e zoom.
-  - Si apre sul giorno di oggi. Le frecce ◀ ▶ cambiano giorno, **OGGI** torna a oggi, toccando la data si sceglie un periodo.
-  - Legenda sempre visibile: verde = libero, rosso = occupato nel periodo.
-    Sul quadrato compaiono il periodo della prenotazione, **€** se c'è da incassare e **✓** se il cliente è arrivato.
-  - **Pressione lunga** su un ombrellone: chi c'era **prima**, chi c'è **nel periodo** e chi arriva **dopo**,
-    con i giorni liberi in mezzo, più tutta la stagione.
-- **Planner** (dalla home o dall'icona calendario nella mappa): una riga per ombrellone, una colonna per giorno.
-  Le prenotazioni sono barre con il nome: rosse quelle del periodo scelto, grigie quelle prima e dopo.
-  Tocco su una barra per modificarla, su uno spazio vuoto per prenotare. Per **spostare** si tocca la barra,
-  "Sposta" e poi la riga di destinazione: le righe libere per quelle date diventano verdi.
-- **Scheda prenotazione**: nome con completamento automatico dai clienti già visti, telefono con tasti **Chiama** e
-  **WhatsApp** (con il riepilogo della prenotazione già scritto), date, prezzo, acconto, saldato, note.
-  Il riquadro **Prima / Dopo** mostra chi c'è su quell'ombrellone prima e dopo le date scelte.
-  Si può spostare su un altro ombrellone o allungare altrove. Mostra chi ha fatto l'ultima modifica.
-- **Controllo doppie prenotazioni**: prima di ogni salvataggio l'app ricontrolla sul server che l'ombrellone sia libero,
-  così due telefoni non possono prenotare lo stesso posto negli stessi giorni.
-- **Eliminazione con conferma** e tasto **ANNULLA** per qualche secondo.
-- **Arrivi e partenze** del giorno, con spunta di arrivo, importo da incassare e contatti.
-- **Incassi e statistiche**: occupazione per settore, incassato, da incassare ed elenco di chi deve ancora pagare.
-- **Ricerca** per nome, telefono o numero di ombrellone.
-- **Editor mappa** e **Reset stagione**: solo per gli admin. L'editor non permette di togliere un ombrellone
-  che ha prenotazioni.
-
-## Sicurezza (senza login)
-
-- **Nessuna schermata di login e nessuna password.** Ogni telefono entra in Firebase da solo, in modo
-  invisibile (accesso anonimo), e riceve un codice univoco.
-- Un telefono nuovo mostra "in attesa di approvazione". Un telefono admin lo approva da **Telefoni**
-  e da quel momento l'app si apre direttamente. Si può togliere l'accesso in qualsiasi momento.
-- Le [regole Firestore](firestore.rules) fanno vedere i dati **solo ai telefoni approvati** (collezione
-  `dispositivi`) e controllano anche i dati: campi ammessi, tipi, lunghezze, importi non negativi,
-  fine dopo l'inizio. Un estraneo che si procura l'app non vede niente.
-- "Ultima modifica" mostra il nome del telefono (es. "Telefono di mamma").
-- L'app scarica solo le prenotazioni della stagione in corso, con un solo collegamento condiviso, per restare
-  lontano dai limiti del piano gratuito di Firebase. Lo spazio (1 GB gratis) non è un problema.
+Le anteprime usano dati di esempio e si rigenerano con `flutter test screenshots_test --update-goldens`
+(dalla cartella `applicazione_gestionale`).
 
 ## Configurazione Firebase (una volta sola)
 
 1. **Authentication → Sign-in method**: attiva **Anonimo** (Anonymous).
-2. Installa la nuova versione dell'app sul **tuo** telefono e aprila: scrivi un nome (es. "Telefono di Ale")
-   e premi **Chiedi l'accesso**.
+2. Installa l'app sul tuo telefono e aprila: scrivi un nome (es. "Telefono di Ale") e premi **Chiedi l'accesso**.
 3. **Firestore Database → Dati**: apri la collezione `richieste`, trova il documento con il nome del tuo telefono
-   e **copia il suo ID** (la lunga sequenza di lettere e numeri).
-4. Crea la collezione `dispositivi` con un documento che ha **come ID quello copiato** e i campi:
-   - `nome` (stringa) = il nome del telefono
-   - `ruolo` (stringa) = `admin`
-5. L'app sul tuo telefono si sblocca da sola. Al primo avvio converte anche le prenotazioni salvate in formati
-   vecchi (una volta sola).
-6. Sugli altri telefoni installa l'app e premi **Chiedi l'accesso**; tu li approvi dalla schermata **Telefoni**.
-7. Quando tutti i telefoni sono approvati: **Firestore Database → Regole**, incolla il contenuto di
-   [`firestore.rules`](firestore.rules) e premi *Pubblica*.
+   e **copia il suo ID**.
+4. Crea la collezione `dispositivi` con un documento che ha **come ID quello copiato** e i campi
+   `nome` (stringa) e `ruolo` (stringa) = `admin`.
+5. L'app sul tuo telefono si sblocca da sola. Al primo avvio converte anche le prenotazioni salvate in formati vecchi.
+6. Sugli altri telefoni installa l'app e premi **Chiedi l'accesso**: li approvi dalla schermata **Telefoni**.
+7. Quando tutti i telefoni sono approvati: **Firestore Database → Regole**, incolla [`firestore.rules`](firestore.rules)
+   e premi *Pubblica*.
 
-Se un telefono reinstalla l'app o cancella i dati dell'app, riceve un codice nuovo e va approvato di nuovo.
-
-## Ruoli
+Se un telefono reinstalla l'app o ne cancella i dati, riceve un codice nuovo e va approvato di nuovo.
 
 | Ruolo | Prenotazioni, arrivi, incassi | Editor mappa, reset, telefoni |
 |---|---|---|
@@ -93,8 +111,8 @@ Se un telefono reinstalla l'app o cancella i dati dell'app, riceve un codice nuo
 
 ## Versioni e rilasci
 
-La versione compare in fondo alla schermata principale (es. **V1.0.0**). Per un rilascio ufficiale,
-dal branch `main` e con tutto salvato, fai doppio clic su **`rilascia.bat`** (oppure lancialo dal terminale):
+La versione compare in fondo alla home (es. **V1.0.0**). Per un rilascio ufficiale, dal branch `main` e con tutto
+salvato, fai doppio clic su **`rilascia.bat`**:
 
 | Comando | Effetto |
 |---|---|
@@ -103,18 +121,9 @@ dal branch `main` e con tutto salvato, fai doppio clic su **`rilascia.bat`** (op
 | `rilascia.bat major` | V1.0.0 → V2.0.0 (cambiamenti grossi) |
 | `rilascia.bat prova` | mostra solo la prossima versione |
 
-Lo script aumenta la versione, esegue i test, crea l'APK in `rilasci/`, fa commit, tag `vX.Y.Z` e push.
-
-## Struttura del codice
-
-| File | Cosa contiene |
-|---|---|
-| `lib/models.dart` | Prenotazione, ombrellone, settore |
-| `lib/availability.dart` | Logica pura: disponibilità, conflitti, arrivi, ricerca, statistiche, telefono |
-| `lib/booking_repository.dart` | Lettura delle prenotazioni (un solo listener) e migrazione dati |
-| `lib/booking_service.dart` | Scritture: validazione, controllo conflitti sul server, chi ha modificato |
-| `lib/device_service.dart`, `lib/auth_gate.dart`, `lib/devices_screen.dart` | Accesso senza login: approvazione dei telefoni |
-| `lib/*_screen.dart`, `lib/booking_form.dart`, `lib/umbrella_timeline_view.dart` | Schermate (mappa, planner, scheda, arrivi, statistiche...) |
+Lo script aumenta la versione, esegue i test, crea l'APK in `rilasci/`, prepara le note con le modifiche dall'ultima
+versione, fa commit + tag `vX.Y.Z` + push e apre la pagina GitHub della **Release**: si incollano le note, si allega
+l'APK e si preme *Publish release*.
 
 ## Sviluppo e test
 
@@ -125,8 +134,6 @@ flutter analyze
 flutter test
 ```
 
-I test coprono la logica, il modello, repository e service (con un Firestore finto) e le schermate principali.
-
 Test delle regole Firestore (servono Node.js e Java 21), dalla cartella principale:
 
 ```bash
@@ -135,3 +142,7 @@ npx firebase-tools emulators:exec --only firestore --project demo-spiaggia "npm 
 ```
 
 A ogni push GitHub Actions esegue analisi, test Flutter e test delle regole.
+
+## Autore e uso del codice
+
+Progetto di **Alessandro Mazzotti**. Il codice è pubblicato a scopo dimostrativo: tutti i diritti riservati.

@@ -24,6 +24,7 @@ import 'package:applicazione_gestionale/booking_repository.dart';
 import 'package:applicazione_gestionale/booking_service.dart';
 import 'package:applicazione_gestionale/device_service.dart';
 import 'package:applicazione_gestionale/devices_screen.dart';
+import 'package:applicazione_gestionale/help_screen.dart';
 import 'package:applicazione_gestionale/layout_repository.dart';
 import 'package:applicazione_gestionale/main.dart';
 import 'package:applicazione_gestionale/map_screen.dart';
@@ -280,5 +281,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('SPOSTA SU ALTRO OMBRELLONE'));
     await shot(tester, '12_planner_sposta');
+  });
+
+  testWidgets('13 suggeritore', (tester) async {
+    await phone(tester);
+    await tester.pumpWidget(app(MapScreen(beachSectors: sectors, filterDateRange: DateTimeRange(start: day(15), end: day(19)), openSuggestions: true)));
+    await shot(tester, '13_suggeritore');
+  });
+
+  testWidgets('14 guida', (tester) async {
+    await phone(tester);
+    await tester.pumpWidget(app(const HelpScreen(initialTopic: HelpTopic.mappa)));
+    await shot(tester, '14_guida');
   });
 }

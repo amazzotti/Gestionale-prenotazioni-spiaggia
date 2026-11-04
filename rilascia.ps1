@@ -74,6 +74,18 @@ New-Item -ItemType Directory -Force $outDir | Out-Null
 $apk = Join-Path $outDir "Gestionale-Spiaggia-V$new.apk"
 Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
 
+# --- note di rilascio: le modifiche dall'ultima versione ---
+$previousTag = git tag --list 'v*' --sort=-v:refname | Select-Object -First 1
+if ($previousTag) {
+  $changes = git log --no-merges --pretty='- %s' "$previousTag..HEAD"
+} else {
+  $changes = git log --no-merges --pretty='- %s' -n 30
+}
+$changes = $changes | Where-Object { $_ -notmatch '^- Rilascio V' }
+$notesFile = Join-Path $outDir "Note-V$new.md"
+$notes = @("## Versione V$new", '', 'Novita e correzioni:', '') + $changes + @('', 'Da installare: allegare il file APK Gestionale-Spiaggia-V' + $new + '.apk')
+[IO.File]::WriteAllLines($notesFile, $notes, (New-Object Text.UTF8Encoding $false))
+
 # --- commit, tag e push ---
 git add applicazione_gestionale/pubspec.yaml
 git commit -m "Rilascio V$new"
@@ -86,3 +98,16 @@ git push origin "v$new"
 Write-Host ""
 Write-Host "Fatto! Versione V$new rilasciata." -ForegroundColor Green
 Write-Host "APK da installare sui telefoni: $apk"
+Write-Host "Note di rilascio: $notesFile"
+
+# --- pagina GitHub per pubblicare la Release (con le note e l'APK allegato) ---
+$remote = (git remote get-url origin).Trim() -replace '\.git$', '' -replace '://[^@/]+@', '://'
+if ($remote -match '^https://github\.com/') {
+  $releaseUrl = "$remote/releases/new?tag=v$new&title=V$new"
+  Write-Host ""
+  Write-Host 'Ultimo passo (1 minuto): si apre GitHub. Incolla le note, trascina l''APK nel riquadro allegati e premi "Publish release".'
+  Set-Clipboard -Value ($notes -join "`r`n")
+  Write-Host '(Le note sono gia copiate: basta incollarle con Ctrl+V.)'
+  Start-Process $releaseUrl
+  explorer.exe "/select,$apk"
+}

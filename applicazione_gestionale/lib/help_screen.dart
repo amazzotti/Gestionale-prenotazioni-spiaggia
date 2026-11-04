@@ -23,8 +23,8 @@ const _topics = <_Topic>[
   _Topic(HelpTopic.mappa, Icons.map_outlined, 'La mappa', [
     'Verde = libero, rosso = occupato nel periodo che stai guardando.',
     'Sul quadrato vedi il periodo della prenotazione (data di arrivo sopra, partenza sotto).',
-    'Il bollino € vuol dire che c\'è ancora da incassare, il bollino ✓ che il cliente è arrivato.',
-    'Le frecce ◀ ▶ cambiano giorno, OGGI torna a oggi; toccando la data puoi scegliere un periodo di più giorni.',
+    'Il bollino arancione con l\'euro vuol dire che c\'è ancora da incassare, il bollino verde con la spunta che il cliente è arrivato.',
+    'Le frecce accanto alla data cambiano giorno, OGGI torna a oggi; toccando la data puoi scegliere un periodo di più giorni.',
     'Tocco su un ombrellone: apri la prenotazione o ne crei una nuova.',
     'Pressione lunga su un ombrellone: vedi chi c\'era PRIMA, chi c\'è NEL PERIODO e chi arriva DOPO.',
     'Con due dita puoi ingrandire la mappa.',
@@ -54,7 +54,7 @@ const _topics = <_Topic>[
   ]),
   _Topic(HelpTopic.arrivi, Icons.people_outline, 'Arrivi e partenze', [
     'Chi arriva e chi parte nel giorno scelto (di default oggi).',
-    'Spunta la casella quando il cliente arriva: sulla mappa compare il ✓.',
+    'Spunta la casella quando il cliente arriva: sulla mappa compare il bollino verde.',
     'Tocca "Da incassare" per segnare il pagamento come saldato.',
   ]),
   _Topic(HelpTopic.incassi, Icons.bar_chart, 'Incassi e statistiche', [
