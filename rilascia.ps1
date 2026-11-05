@@ -74,7 +74,14 @@ try {
   $newContent = $content.Remove($m.Index, $m.Length).Insert($m.Index, "version: $new+$build")
   [IO.File]::WriteAllText($pubspec, $newContent, $utf8)
 
-  Write-Host 'Creo l''APK (la prima volta puo volerci qualche minuto)...' -ForegroundColor Cyan
+  # Build sempre da zero: senza "flutter clean" Gradle puo considerare il codice
+  # "gia compilato" e rimettere nell'APK quello della versione precedente
+  # (e successo con V1.0.1 e V1.0.2: cambiava solo il numero di versione).
+  Write-Host 'Pulizia della build precedente...' -ForegroundColor Cyan
+  flutter clean | Out-Null
+  flutter pub get | Out-Null
+
+  Write-Host 'Creo l''APK da zero (qualche minuto)...' -ForegroundColor Cyan
   flutter build apk --release
   if ($LASTEXITCODE -ne 0) {
     [IO.File]::WriteAllText($pubspec, $content, $utf8)
@@ -89,7 +96,28 @@ $outDir = Join-Path $PSScriptRoot 'rilasci'
 New-Item -ItemType Directory -Force $outDir | Out-Null
 $apkName = "Gestionale-Spiaggia-V$new.apk"
 $apk = Join-Path $outDir $apkName
-Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
+$builtApk = Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk'
+
+# Controllo: il codice dentro il nuovo APK deve essere diverso da quello dell'ultima versione pubblicata.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function Get-AppCodeHash([string]$path) {
+  $zip = [IO.Compression.ZipFile]::OpenRead($path)
+  try {
+    $entry = $zip.GetEntry('lib/arm64-v8a/libapp.so')
+    if (-not $entry) { return $null }
+    $stream = $entry.Open()
+    try { return [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($stream)) }
+    finally { $stream.Dispose() }
+  }
+  finally { $zip.Dispose() }
+}
+$previousApk = Get-ChildItem $outDir -Filter 'Gestionale-Spiaggia-V*.apk' -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -ne $apkName } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($previousApk -and (Get-AppCodeHash $builtApk) -eq (Get-AppCodeHash $previousApk.FullName)) {
+  [IO.File]::WriteAllText($pubspec, $content, $utf8)
+  throw "L'APK appena creato contiene lo stesso codice di $($previousApk.Name): rilascio annullato, versione ripristinata."
+}
+Copy-Item $builtApk $apk -Force
 
 # --- note di rilascio ---
 $curated = Join-Path $PSScriptRoot "note-rilascio\V$new.md"
