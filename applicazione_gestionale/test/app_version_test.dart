@@ -15,5 +15,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: AppVersionText())));
     await tester.pumpAndSettle();
     expect(find.text('V1.2.3'), findsOneWidget);
+    expect(find.text('Ideata e progettata da Alessandro Mazzotti'), findsOneWidget);
+    final credit = tester.widget<Text>(find.text(authorCredit));
+    expect(credit.style?.fontStyle, FontStyle.italic);
   });
 }
