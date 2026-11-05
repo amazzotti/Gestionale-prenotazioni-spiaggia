@@ -10,6 +10,7 @@ import 'auth_gate.dart';
 import 'availability.dart';
 import 'beach_editor_screen.dart';
 import 'booking_repository.dart';
+import 'device_service.dart';
 import 'devices_screen.dart';
 import 'help_screen.dart';
 import 'layout_repository.dart';
@@ -17,6 +18,7 @@ import 'map_screen.dart';
 import 'planner_screen.dart';
 import 'sector_style.dart';
 import 'stats_screen.dart';
+import 'system_bars.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +63,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
+      // Lascia libero lo spazio dei tasti di Android in fondo a tutte le schermate.
+      builder: (context, child) => SystemBarsSafeArea(child: child ?? const SizedBox.shrink()),
       home: home ?? AuthGate(builder: (context, {required isAdmin}) => HomeScreen(isAdmin: isAdmin)),
     );
   }
@@ -344,6 +348,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                       const SizedBox(height: 24),
+                      Text(
+                        '${DeviceService.instance.currentDeviceName ?? 'Questo telefono'} · '
+                        '${widget.isAdmin ? 'Famiglia: tutto' : 'Solo prenotazioni'}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                      ),
+                      const SizedBox(height: 4),
                       const AppVersionText(),
                     ],
                   ),
