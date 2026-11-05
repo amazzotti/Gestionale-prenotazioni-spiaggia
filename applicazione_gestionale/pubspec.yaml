@@ -2,7 +2,7 @@ name: applicazione_gestionale
 description: "Gestionale prenotazioni ombrelloni - Bagni Carla 98"
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.1+3
 
 environment:
   sdk: ^3.9.2
